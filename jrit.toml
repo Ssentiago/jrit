@@ -1,0 +1,9 @@
+components = []
+
+[project]
+name = "jrit"
+repo = "Ssentiago/jrit"
+branches = ["main", "master"]
+changelog_type = "conventional"
+changelog = "CHANGELOG.md"
+release_mode = "ci"
