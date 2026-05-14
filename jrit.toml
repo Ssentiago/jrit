@@ -1,5 +1,3 @@
-components = []
-
 [project]
 name = "jrit"
 repo = "Ssentiago/jrit"
@@ -7,3 +5,13 @@ branches = ["main", "master"]
 changelog_type = "conventional"
 changelog = "CHANGELOG.md"
 release_mode = "ci"
+
+[[components]]
+name = "main"
+path = "."
+build = "cargo build --release"
+artifact = "./target/release/jrit"
+zip = true
+
+[[components.version_files]]
+file = "Cargo.toml"
