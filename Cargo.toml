@@ -1,15 +1,11 @@
 [package]
 name = "jrit"
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-toml = { version = "1.1.2", features = ["preserve_order", "serde"] }
-serde_json = { version = "1.0.149", features = ["preserve_order"] }
-tokio = { version = "1.52.1", features = ["rt", "rt-multi-thread", "macros"] }
 inquire = "0.9.4"
 anyhow = "1.0.102"
-serde = { version = "1.0.228", features = ["derive"] }
 octocrab = "0.50.0"
 sha2 = "0.11.0"
 dirs = "6.0.0"
@@ -20,10 +16,43 @@ fancy-regex = "0.18.0"
 semver = "1"
 zip = "2"
 walkdir = "2"
-git-cliff-core = { version = "2", default-features = false, features = ["repo"] }
 tempfile = "3"
 chrono = "0.4.44"
 owo-colors = "4"
-clap = { version = "4", features = ["derive"] }
 serde_yaml = "0.9"
-indexmap = { version = "2", features = ["serde"] }
+
+[dependencies.toml]
+version = "1.1.2"
+features = [
+    "preserve_order",
+    "serde",
+]
+
+[dependencies.serde_json]
+version = "1.0.149"
+features = ["preserve_order"]
+
+[dependencies.tokio]
+version = "1.52.1"
+features = [
+    "rt",
+    "rt-multi-thread",
+    "macros",
+]
+
+[dependencies.serde]
+version = "1.0.228"
+features = ["derive"]
+
+[dependencies.git-cliff-core]
+version = "2"
+default-features = false
+features = ["repo"]
+
+[dependencies.clap]
+version = "4"
+features = ["derive"]
+
+[dependencies.indexmap]
+version = "2"
+features = ["serde"]
