@@ -200,6 +200,21 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                 Box::pin(async move {
                     let version = ctx.release_version.as_ref().unwrap();
                     let branch = ctx.branch.as_ref().unwrap();
+
+                    if let Some(ref cf) = ctx.config {
+                        if cf.project.changelog_type != "none" {
+                            if let Some(ref changelog) = cf.project.changelog {
+                                let step = git_step::CommitStep::new(git_step::CommitParams {
+                                    files: vec![PathBuf::from(changelog)],
+                                    message: "chore: update changelog".to_string(),
+                                    branch: branch.clone(),
+                                })
+                                .build_step();
+                                ctx.pending_steps.push(step);
+                            }
+                        }
+                    }
+
                     let step = git_step::CommitStep::new(git_step::CommitParams {
                         files: ctx.bumped_files.clone(),
                         message: format!("chore: update app version to {version}"),
@@ -207,6 +222,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                     })
                     .build_step();
                     ctx.pending_steps.push(step);
+
                     Ok(Pipeline::no_rollback())
                 })
             },
