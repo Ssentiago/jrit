@@ -17,14 +17,21 @@ struct Cli {
 enum Command {
     /// Initialize jrit.toml interactively and create release workflow
     Init,
+    /// Updates self
+    Update,
 }
 
 #[tokio::main]
 async fn main() {
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .expect("failed to install rustls crypto provider");
+
     let cli = Cli::parse();
 
     let result = match cli.command {
         Some(Command::Init) => commands::init::run_init().await,
+        Some(Command::Update) => commands::update::main().await,
         None => run_pipeline().await,
     };
 
