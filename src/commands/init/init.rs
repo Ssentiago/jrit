@@ -1,12 +1,21 @@
 use crate::commands::init::ci_gen::{self, CiGenParams, SetupStep, available_targets};
 use crate::config::{Component, Config, Project, VersionFile};
 use inquire::MultiSelect;
+use inquire::validator::Validation;
 use inquire::{Confirm, Select, Text};
 use owo_colors::OwoColorize;
 
 pub async fn run_init() -> anyhow::Result<()> {
     let name = Text::new("Project name:").prompt()?;
-    let repo = Text::new("GitHub repo (owner/repo):").prompt()?;
+    let mut repo = Text::new("GitHub repo (owner/repo):");
+    repo.validators = vec![Box::new(|v: &str| {
+        if v.split("/").count() == 2 {
+            Ok(Validation::Valid)
+        } else {
+            Ok(Validation::Invalid("must be in format 'owner/repo'".into()))
+        }
+    })];
+    let repo = repo.prompt()?;
     let branches = Text::new("Allowed branches (comma-separated):")
         .with_default("main,master")
         .prompt()?;
@@ -28,59 +37,65 @@ pub async fn run_init() -> anyhow::Result<()> {
     let release_mode = Select::new("Release mode:", vec!["local", "ci"]).prompt()?;
     let mut components: Vec<Component> = vec![];
 
-    if release_mode == "local" {
-        loop {
-            println!("Add a component ({} so far)", components.len());
-            let name = Text::new("  Component name:").prompt()?;
-            let path = Text::new("  Path (relative to jrit.toml):")
-                .with_default(".")
-                .prompt()?;
+    let is_local_mode = release_mode == "local";
+
+    loop {
+        println!("Add a component ({} so far)", components.len());
+        let name = Text::new("  Component name:").prompt()?;
+        let path = Text::new("  Path (relative to jrit.toml):")
+            .with_default(".")
+            .prompt()?;
+
+        let (build, artifact, zip) = if is_local_mode {
             let build = Text::new("  Build command:").prompt()?;
             let artifact = Text::new("  Artifact path:").prompt()?;
             let zip = Confirm::new("  Zip artifact?")
                 .with_default(true)
                 .prompt()?;
+            (build, artifact, zip)
+        } else {
+            (String::new(), String::new(), false)
+        };
 
-            let mut version_files: Vec<VersionFile> = vec![];
-            loop {
-                let file = Text::new("    Version file (e.g. Cargo.toml):").prompt()?;
-                let infer = Confirm::new("    Infer version path automatically?")
-                    .with_default(true)
-                    .prompt()?;
-                let path = if infer {
-                    None
-                } else {
-                    let raw =
-                        Text::new("    Version path (comma-separated keys, e.g. package,version):")
-                            .prompt()?;
-                    Some(raw.split(',').map(|k| k.trim().to_string()).collect())
-                };
+        let mut version_files: Vec<VersionFile> = vec![];
+        loop {
+            let file = Text::new("    Version file (e.g. Cargo.toml):").prompt()?;
+            let infer = Confirm::new("    Infer version path automatically?")
+                .with_default(true)
+                .prompt()?;
+            let path = if infer {
+                None
+            } else {
+                let raw =
+                    Text::new("    Version path (comma-separated keys, e.g. package,version):")
+                        .prompt()?;
+                Some(raw.split(',').map(|k| k.trim().to_string()).collect())
+            };
 
-                version_files.push(VersionFile { file, path });
+            version_files.push(VersionFile { file, path });
 
-                if !Confirm::new("    Add another version file?")
-                    .with_default(false)
-                    .prompt()?
-                {
-                    break;
-                }
-            }
-
-            components.push(Component {
-                name,
-                path,
-                build,
-                artifact,
-                zip,
-                version_files,
-            });
-
-            if !Confirm::new("Add another component?")
+            if !Confirm::new("    Add another version file?")
                 .with_default(false)
                 .prompt()?
             {
                 break;
             }
+        }
+
+        components.push(Component {
+            name,
+            path,
+            build,
+            artifact,
+            zip,
+            version_files,
+        });
+
+        if !Confirm::new("Add another component?")
+            .with_default(false)
+            .prompt()?
+        {
+            break;
         }
     }
 
@@ -96,7 +111,7 @@ pub async fn run_init() -> anyhow::Result<()> {
         components,
     };
 
-    std::fs::write("../../../jrit.toml", &toml::to_string(&out)?)?;
+    std::fs::write("jrit.toml", &toml::to_string(&out)?)?;
 
     println!("{} jrit.toml created", "✓".green());
 
