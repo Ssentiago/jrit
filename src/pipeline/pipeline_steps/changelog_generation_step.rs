@@ -29,8 +29,8 @@ impl ChangelogGen {
     ) -> Self {
         Self {
             root,
-            version,
             repo_path,
+            version,
             changelog_path,
             original_content: None,
             changelog_type,
@@ -54,6 +54,7 @@ impl ChangelogGen {
         prepend_to_changelog(&edited, &self.changelog_path)?;
         Ok(())
     }
+
     fn rollback(&mut self) -> Result<()> {
         match &self.original_content {
             Some(original) => {
@@ -188,6 +189,7 @@ fn generate_raw(root: &Path, version: &str) -> Result<String> {
     let date = chrono::Local::now().format("%Y-%m-%d");
     Ok(format!("## [{version}] - {date}\n\n{log}"))
 }
+
 pub fn open_in_editor(content: &str) -> Result<String> {
     let editor = std::env::var("EDITOR")
         .or_else(|_| std::env::var("VISUAL"))
@@ -216,7 +218,7 @@ fn prepend_to_changelog(content: &str, changelog_path: &Path) -> Result<()> {
         String::new()
     };
 
-    let combined = format!("{}\n{}", content.trim(), existing);
+    let combined = format!("{}\n\n{}", content.trim(), existing);
     std::fs::write(changelog_path, combined)?;
 
     Ok(())
