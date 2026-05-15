@@ -1,3 +1,7 @@
+## [0.3.0] - 2026-05-16
+
+### Features
+- make commit hashes in release body clickable ([`bb8feac`](https://github.com/Ssentiago/jrit/commit/bb8feac3c56cbec03ad7f9513a5d5b8790496a00))
 ## [0.2.0] - 2026-05-15
 
 ### Features
