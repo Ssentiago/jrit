@@ -77,9 +77,15 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         }
                     };
 
+                    if config.project.repo.is_empty() {
+                        bail!("project.repo is required for changelog generation");
+                    }
+                    let repo = &config.project.repo;
+
                     let step = changelog_generation_step::ChangelogGen::new(
                         root.clone(),
                         version.clone(),
+                        repo.clone(),
                         changelog_path,
                         config.project.changelog_type.clone(),
                     )

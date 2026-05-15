@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 pub struct ChangelogGen {
     root: PathBuf,
+    repo_path: String,
     version: String,
     changelog_path: PathBuf,
     changelog_type: String,
@@ -21,6 +22,7 @@ pub struct ChangelogGen {
 impl ChangelogGen {
     pub fn new(
         root: PathBuf,
+        repo_path: String,
         version: String,
         changelog_path: PathBuf,
         changelog_type: String,
@@ -28,6 +30,7 @@ impl ChangelogGen {
         Self {
             root,
             version,
+            repo_path,
             changelog_path,
             original_content: None,
             changelog_type,
@@ -42,7 +45,7 @@ impl ChangelogGen {
         };
 
         let draft = match self.changelog_type.as_str() {
-            "conventional" => generate_conventional(&self.root, &self.version)?,
+            "conventional" => generate_conventional(&self.root, &self.version, &self.repo_path)?,
             "raw" => generate_raw(&self.root, &self.version)?,
             t => bail!("unknown changelog_type: {t}"),
         };
@@ -87,22 +90,24 @@ impl ChangelogGen {
     }
 }
 
-fn generate_conventional(root: &Path, version: &str) -> Result<String> {
+fn generate_conventional(root: &Path, version: &str, repo_path: &str) -> Result<String> {
     let repo = Repository::init(root.to_path_buf())?;
 
-    let config = Config {
-        changelog: ChangelogConfig {
-            header: None,
-            body: "\
+    let body_template = "\
 {% set order = [\"Features\", \"Bug Fixes\", \"Refactoring\", \"Chores\"] %}\
 {% for group_name in order %}\
 {% set group_commits = commits | filter(attribute=\"group\", value=group_name) %}\
 {% if group_commits %}\
 ### {{ group_name }}\n\
-{% for commit in group_commits %}- {{ commit.message }} ([`{{ commit.id | truncate(length=7, end=\"\") }}`])\n{% endfor %}\n\
+{% for commit in group_commits %}- {{ commit.message }} ([`{{ commit.id | truncate(length=7, end=\"\") }}`](https://github.com/__REPO__/commit/{{ commit.id }}))\n{% endfor %}\n\
 {% endif %}\
 {% endfor %}"
-                .to_string(),
+        .replace("__REPO__", repo_path);
+
+    let config = Config {
+        changelog: ChangelogConfig {
+            header: None,
+            body: body_template,
             footer: None,
             trim: true,
             ..Default::default()
