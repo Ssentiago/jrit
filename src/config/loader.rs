@@ -31,9 +31,12 @@ fn validate_config(config: &Config) -> anyhow::Result<()> {
             p.repo
         ));
     }
-    if !matches!(p.changelog_type.as_str(), "conventional" | "raw" | "none") {
+    if !matches!(
+        p.changelog_type.as_str(),
+        "conventional" | "raw" | "manual" | "none"
+    ) {
         errors.push(format!(
-            "unknown changelog_type '{}', expected: conventional, raw, none",
+            "unknown changelog_type '{}', expected: conventional, manual, raw, none",
             p.changelog_type
         ));
     }

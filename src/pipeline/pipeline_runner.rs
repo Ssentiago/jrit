@@ -64,9 +64,10 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
             |ctx| {
                 Box::pin(async move {
                     let config = ctx.config.as_ref().unwrap();
-                    if config.project.changelog_type == "none" {
+                    if matches!(config.project.changelog_type.as_str(), "manual" | "none") {
                         return Ok(Pipeline::no_rollback());
                     }
+
                     let root = ctx.root.as_ref().unwrap();
                     let version = ctx.release_version.as_ref().unwrap();
                     let changelog_path = match &config.project.changelog {

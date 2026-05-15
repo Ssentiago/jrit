@@ -21,8 +21,11 @@ pub async fn run_init() -> anyhow::Result<()> {
         .prompt()?;
     let branches: Vec<String> = branches.split(',').map(|s| s.trim().to_string()).collect();
 
-    let changelog_type =
-        Select::new("Changelog type:", vec!["none", "conventional", "raw"]).prompt()?;
+    let changelog_type = Select::new(
+        "Changelog type:",
+        vec!["none", "conventional", "raw", "manual"],
+    )
+    .prompt()?;
 
     let changelog = if changelog_type != "none" {
         Some(
