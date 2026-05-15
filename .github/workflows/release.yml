@@ -80,14 +80,39 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Build release body
+        id: body
+        run: |
+          TAG="${{ github.ref_name }}"
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${TAG}$" | head -n1)
+
+          CHANGELOG=$(awk "/^## \[${TAG}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+
+          if [ -n "$PREV_TAG" ]; then
+            URL="https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${TAG}"
+            BODY="${CHANGELOG}"$'\n\n'"Full changelog: ${URL}"
+          else
+            BODY="${CHANGELOG}"
+          fi
+
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create release and upload assets
         uses: softprops/action-gh-release@v2
         with:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
+          body: ${{ steps.body.outputs.body }}
           files: artifacts/**/*
