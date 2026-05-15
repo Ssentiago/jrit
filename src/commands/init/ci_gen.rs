@@ -5,6 +5,7 @@ use serde::Serialize;
 pub struct Workflow {
     pub name: String,
     pub on: On,
+    pub permissions: IndexMap<String, String>,
     pub jobs: IndexMap<String, Job>,
 }
 
@@ -20,7 +21,10 @@ pub struct PushTrigger {
 
 #[derive(Serialize)]
 pub struct Job {
-    pub strategy: Strategy,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub needs: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strategy: Option<Strategy>,
     #[serde(rename = "runs-on")]
     pub runs_on: String,
     pub steps: Vec<Step>,
@@ -256,15 +260,54 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
     jobs.insert(
         "build".to_string(),
         Job {
-            strategy: Strategy {
+            needs: None,
+            strategy: Some(Strategy {
                 matrix: Matrix {
                     include: matrix_entries,
                 },
-            },
+            }),
             runs_on: "${{ matrix.os }}".into(),
             steps,
         },
     );
+
+    jobs.insert(
+        "release".to_string(),
+        Job {
+            needs: Some(vec!["build".into()]),
+            strategy: None,
+            runs_on: "ubuntu-latest".into(),
+            steps: vec![
+                Step::Uses(UsesStep {
+                    name: "Download all artifacts".into(),
+                    uses: "actions/download-artifact@v4".into(),
+                    condition: None,
+                    with: Some({
+                        let mut m = IndexMap::new();
+                        m.insert("path".into(), "artifacts".into());
+                        m
+                    }),
+                    env: None,
+                }),
+                Step::Uses(UsesStep {
+                    name: "Create release and upload assets".into(),
+                    uses: "softprops/action-gh-release@v2".into(),
+                    condition: None,
+                    with: Some({
+                        let mut m = IndexMap::new();
+                        m.insert("name".into(), "Release ${{ github.ref_name }}".into());
+                        m.insert("tag_name".into(), "${{ github.ref_name }}".into());
+                        m.insert("files".into(), "artifacts/**/*".into());
+                        m
+                    }),
+                    env: None,
+                }),
+            ],
+        },
+    );
+
+    let mut permissions = IndexMap::new();
+    permissions.insert("contents".into(), "write".into());
 
     let workflow = Workflow {
         name: format!("Release {}", params.project_name),
@@ -273,6 +316,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
                 tags: vec!["*".into()],
             },
         },
+        permissions,
         jobs,
     };
 
@@ -280,7 +324,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
 }
 
 pub fn write_workflow(content: &str) -> anyhow::Result<()> {
-    let dir = std::path::Path::new("../../../.github/workflows");
+    let dir = std::path::Path::new(".github/workflows");
     std::fs::create_dir_all(dir)?;
     std::fs::write(dir.join("release.yml"), content)?;
     Ok(())
