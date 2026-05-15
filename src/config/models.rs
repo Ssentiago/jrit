@@ -68,13 +68,14 @@ impl VersionFile {
 pub struct Component {
     pub name: String,
     pub path: String,
+    #[serde(default)]
     pub build: String,
+    #[serde(default)]
     pub artifact: String,
     pub version_files: Vec<VersionFile>,
     #[serde(default = "default_zip")]
     pub zip: bool,
 }
-
 fn default_zip() -> bool {
     true
 }

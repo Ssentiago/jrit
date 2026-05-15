@@ -1,5 +1,6 @@
 use crate::config::models::Config;
 use anyhow::Context;
+use anyhow::bail;
 use std::path::PathBuf;
 
 pub fn load(path: PathBuf) -> anyhow::Result<Config> {
@@ -11,70 +12,78 @@ pub fn load(path: PathBuf) -> anyhow::Result<Config> {
         anyhow::anyhow!(e)
     })?;
 
-    warn_missing(&config);
+    validate_config(&config)?;
     Ok(config)
 }
 
-fn warn_missing(config: &Config) {
+fn validate_config(config: &Config) -> anyhow::Result<()> {
     let p = &config.project;
+    let mut errors: Vec<String> = Vec::new();
 
     if p.name.is_empty() {
-        eprintln!("warning: project.name is empty");
+        errors.push("project.name is empty".into());
     }
     if p.repo.is_empty() {
-        eprintln!("warning: project.repo is empty");
+        errors.push("project.repo is empty".into());
     } else if !p.repo.contains('/') {
-        eprintln!(
-            "warning: project.repo should be in format 'owner/repo' (got: '{}')",
+        errors.push(format!(
+            "project.repo should be in format 'owner/repo' (got: '{}')",
             p.repo
-        );
+        ));
     }
     if !matches!(p.changelog_type.as_str(), "conventional" | "raw" | "none") {
-        eprintln!(
-            "warning: unknown changelog_type '{}', expected: conventional, raw, none",
+        errors.push(format!(
+            "unknown changelog_type '{}', expected: conventional, raw, none",
             p.changelog_type
-        );
+        ));
     }
     if p.changelog_type != "none" && p.changelog.is_none() {
-        eprintln!("warning: project.changelog is required when changelog_type is not 'none'");
+        errors.push("project.changelog is required when changelog_type is not 'none'".into());
     }
     if !matches!(p.release_mode.as_str(), "local" | "ci") {
-        eprintln!("warning: project.release_mode must be 'local' or 'ci'");
+        errors.push("project.release_mode must be 'local' or 'ci'".into());
     }
     if p.branches.is_empty() {
-        eprintln!("warning: project.branches is empty");
+        errors.push("project.branches is empty".into());
     }
     if config.components.is_empty() {
-        eprintln!("warning: no [[components]] defined");
+        errors.push("no [[components]] defined".into());
     }
+
+    let is_ci_mode = p.release_mode.as_str() == "ci";
 
     for (i, c) in config.components.iter().enumerate() {
         let label = format!("components[{i}]");
         if c.name.is_empty() {
-            eprintln!("warning: {label}.name is empty");
+            errors.push(format!("{label}.name is empty"));
         }
         if c.path.is_empty() {
-            eprintln!("warning: {label}.path is empty");
+            errors.push(format!("{label}.path is empty"));
         }
-        if c.build.is_empty() {
-            eprintln!("warning: {label}.build is empty");
+        if c.build.is_empty() && !is_ci_mode {
+            errors.push(format!("{label}.build is empty"));
         }
-        if c.artifact.is_empty() {
-            eprintln!("warning: {label}.artifact is empty");
+        if c.artifact.is_empty() && !is_ci_mode {
+            errors.push(format!("{label}.artifact is empty"));
         }
         if c.version_files.is_empty() {
-            eprintln!("warning: {label}.version_files is empty");
+            errors.push(format!("{label}.version_files is empty"));
         }
 
         for (j, vf) in c.version_files.iter().enumerate() {
             let vf_label = format!("{label}.version_files[{j}]");
             if vf.file.is_empty() {
-                eprintln!("warning: {vf_label}.file is empty");
+                errors.push(format!("{vf_label}.file is empty"));
                 continue;
             }
             if let Err(e) = vf.resolved_path() {
-                eprintln!("warning: {vf_label}: {e}");
+                errors.push(format!("{vf_label}: {e}"));
             }
         }
     }
+
+    if !errors.is_empty() {
+        bail!("config validation failed:\n{}", errors.join("\n"));
+    }
+    Ok(())
 }
