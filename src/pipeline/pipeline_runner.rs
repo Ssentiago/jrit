@@ -84,8 +84,8 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
 
                     let step = changelog_generation_step::ChangelogGen::new(
                         root.clone(),
-                        version.clone(),
                         repo.clone(),
+                        version.clone(),
                         changelog_path,
                         config.project.changelog_type.clone(),
                     )
