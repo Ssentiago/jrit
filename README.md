@@ -27,6 +27,13 @@ jrit
 
 jrit will walk up the directory tree to find `jrit.toml` automatically.
 
+### Commands
+
+```bash
+jrit init      # interactively create jrit.toml and optionally generate a CI workflow
+jrit update    # update jrit itself to the latest version
+```
+
 ## Changelog
 
 jrit expects a `CHANGELOG.md` in [Keep a Changelog](https://keepachangelog.com) format. Each release section must start
@@ -67,7 +74,7 @@ name = "my-app"
 repo = "owner/repo"               # GitHub repo in owner/repo format
 branches = ["main", "master"]     # allowed release branches; if you're on a different branch, jrit will ask
 
-changelog_type = "conventional"   # optional: "conventional" | "raw" | "none" (default: "none")
+changelog_type = "conventional"   # optional: "conventional" | "raw" | "manual" | "none" (default: "none")
 changelog = "CHANGELOG.md"        # required if changelog_type is not "none"
 
 release_mode = "local"            # optional: "local" | "ci" (default: "local")
@@ -75,9 +82,9 @@ release_mode = "local"            # optional: "local" | "ci" (default: "local")
 [[components]]
 name = "main"
 path = "."                            # directory of the component, relative to jrit.toml
-build = "cargo build --release"       # build command, run from the component's path
-artifact = "./target/release/my-app"  # path to the built binary or directory, relative to component path
-zip = true                            # pack artifact into a zip before uploading (default: true)
+build = "cargo build --release"       # build command, run from the component's path (local mode only)
+artifact = "./target/release/my-app"  # path to the built binary or directory, relative to component path (local mode only)
+zip = true                            # pack artifact into a zip before uploading (default: true, local mode only)
 
 [[components.version_files]]
 file = "Cargo.toml"
@@ -94,6 +101,7 @@ Controls how the changelog is handled:
   groups them by type, opens in `$EDITOR` for review, then prepends to the changelog file.
 - `raw` — dumps raw `git log --oneline` since the last tag into a temp file and opens it in `$EDITOR`. You format it
   yourself.
+- `manual` — skip changelog generation, only check that the expected changelog section exists in the file.
 
 After you close the editor, the result is prepended to the changelog file and the pipeline continues.
 
@@ -103,7 +111,8 @@ Controls which steps are executed:
 
 - `local` (default) — full pipeline: bump versions, build artifacts, commit, tag, publish GitHub release.
 - `ci` — jrit only bumps versions, commits, and pushes a tag. Build and GitHub release are handled by your CI on tag
-  trigger. Useful for cross-platform builds with GitHub Actions matrix.
+  trigger. Useful for cross-platform builds with GitHub Actions matrix. The `build`, `artifact`, and `zip` fields in
+  `[[components]]` are ignored in this mode.
 
 ### `changelog` path
 
