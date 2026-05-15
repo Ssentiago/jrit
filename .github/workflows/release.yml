@@ -15,13 +15,13 @@ jobs:
         include:
           - os: macos-latest
             target: universal-apple-darwin
-            artifact_name: app-macos
+            artifact_name: jrit-macos
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: app-windows.exe
+            artifact_name: jrit-windows.exe
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: app-linux
+            artifact_name: jrit-linux
 
     runs-on: ${{ matrix.os }}
 
