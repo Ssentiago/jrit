@@ -72,7 +72,17 @@ pub async fn run_init() -> anyhow::Result<()> {
 
         let mut version_files: Vec<VersionFile> = vec![];
         loop {
-            let file = Text::new("    Version file (e.g. Cargo.toml):").prompt()?;
+            let file = Select::new(
+                "Version file:",
+                vec!["Cargo.toml", "package.json", "Enter manually"],
+            )
+            .prompt()?;
+
+            let file = match file {
+                "Enter manually" => Text::new("Path:").prompt()?,
+                other => other.to_string(),
+            };
+
             let infer = Confirm::new("    Infer version path automatically?")
                 .with_default(true)
                 .prompt()?;
