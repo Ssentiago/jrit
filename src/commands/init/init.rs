@@ -45,9 +45,19 @@ pub async fn run_init() -> anyhow::Result<()> {
     loop {
         println!("Add a component ({} so far)", components.len());
         let name = Text::new("  Component name:").prompt()?;
-        let path = Text::new("  Path (relative to jrit.toml):")
-            .with_default(".")
-            .prompt()?;
+        let mut path = Text::new("  Path (relative to jrit.toml):").with_default(".");
+
+        path.validators = vec![Box::new(|v: &str| {
+            let path = std::path::Path::new(v);
+            match path.exists() {
+                true => match path.is_dir() {
+                    true => Ok(Validation::Valid),
+                    false => Ok(Validation::Invalid("component path must be a dir".into())),
+                },
+                false => Ok(Validation::Invalid("component path does not exist".into())),
+            }
+        })];
+        let path = path.prompt()?;
 
         let (build, artifact, zip) = if is_local_mode {
             let build = Text::new("  Build command:").prompt()?;
