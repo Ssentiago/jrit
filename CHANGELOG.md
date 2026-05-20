@@ -1,3 +1,10 @@
+## [0.4.0] - 2026-05-20
+
+### Features
+- resolve version files path from component path ([`92416c8`](https://github.com/Ssentiago/jrit/commit/92416c81ab0a693cbe97431e415e799963bc6336))
+- add default version file options and a manual input ([`87c5949`](https://github.com/Ssentiago/jrit/commit/87c5949d29e5f8aba3873d3b2d7009d676d327d2))
+- ensure component path is exists and this is a dir ([`91bb378`](https://github.com/Ssentiago/jrit/commit/91bb3789b847553319a5ecefcd7d62b8f4a25441))
+
 ## [0.3.1] - 2026-05-16
 
 ### Bug Fixes
