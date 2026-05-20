@@ -1,6 +1,4 @@
-use crate::pipeline::{AppContext, Pipeline};
-use anyhow::bail;
-
+use crate::config::VersionFile;
 use crate::pipeline::pipeline_steps::git_step::GitOps;
 use crate::pipeline::pipeline_steps::interactive_step::{ConfirmAction, Interactive};
 use crate::pipeline::pipeline_steps::parse_changelog_step::Changelog;
@@ -10,6 +8,8 @@ use crate::pipeline::pipeline_steps::versioning_step::{
 use crate::pipeline::pipeline_steps::{
     build_step, changelog_generation_step, get_root_step, git_step, github_step, parse_config_step,
 };
+use crate::pipeline::{AppContext, Pipeline};
+use anyhow::bail;
 use std::path::PathBuf;
 
 pub async fn run_pipeline() -> anyhow::Result<()> {
@@ -148,31 +148,41 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         .components
                         .iter()
                         .flat_map(|c| {
-                            c.version_files.iter().map(
-                                |vf| -> anyhow::Result<Box<dyn VersionBumper>> {
-                                    let path = PathBuf::from(&vf.file);
-                                    let resolved = vf.resolved_path()?;
-                                    let bumper: Box<dyn VersionBumper> =
-                                        match path.extension().and_then(|e| e.to_str()) {
-                                            Some("toml") => {
-                                                Box::new(TomlVersionBumper::new(path, resolved))
-                                            }
-                                            Some("json") => {
-                                                Box::new(JsonVersionBumper::new(path, resolved))
-                                            }
+                            c.version_files
+                                .iter()
+                                .map(
+                                    |vf: &VersionFile| -> anyhow::Result<Box<dyn VersionBumper>> {
+                                        let path = PathBuf::from(&vf.file);
+                                        let resolved = vf.resolved_path()?;
+                                        let full_path = PathBuf::from(&c.path).join(&vf.file);
+                                        let bumper: Box<dyn VersionBumper> = match path
+                                            .extension()
+                                            .and_then(|e| e.to_str())
+                                        {
+                                            Some("toml") => Box::new(TomlVersionBumper::new(
+                                                full_path, resolved,
+                                            )),
+                                            Some("json") => Box::new(JsonVersionBumper::new(
+                                                full_path, resolved,
+                                            )),
                                             Some(ext) => bail!("Unknown version file type: {ext}"),
                                             None => bail!("No extension: {}", vf.file),
                                         };
-                                    Ok(bumper)
-                                },
-                            )
+                                        Ok(bumper)
+                                    },
+                                )
+                                .collect::<Vec<_>>()
                         })
                         .collect::<anyhow::Result<_>>()?;
 
                     ctx.bumped_files = config
                         .components
                         .iter()
-                        .flat_map(|c| c.version_files.iter().map(|vf| PathBuf::from(&vf.file)))
+                        .flat_map(|c| {
+                            c.version_files
+                                .iter()
+                                .map(|vf| PathBuf::from(&c.path).join(&vf.file))
+                        })
                         .collect();
 
                     for bumper in bumpers {
