@@ -1,3 +1,8 @@
+## [0.4.1] - 2026-07-23
+
+### Bug Fixes
+- skip changelog date in release body ([`16a81a8`](https://github.com/Ssentiago/jrit/commit/16a81a80aacba23fde0ad3ae1cf7407f8251d2da))
+
 ## [0.4.0] - 2026-05-20
 
 ### Features
