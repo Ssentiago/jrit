@@ -19,7 +19,7 @@ impl Changelog {
 
         let escaped_version = escape(&version);
         let pattern = Regex::new(&format!(
-            r"(?ms)^## \[{version}\](.*?)(?=^## |\z)",
+            r"(?ms)^## \[{version}\](?:\s*-\s*\d{{4}}-\d{{2}}-\d{{2}})?(.*?)(?=^## |\z)",
             version = escaped_version
         ))?;
 
