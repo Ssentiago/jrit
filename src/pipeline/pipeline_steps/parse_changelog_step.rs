@@ -15,7 +15,7 @@ impl Changelog {
             bail!("Changelog at path {} not found", path.display());
         }
 
-        let content = std::fs::read_to_string(path)?;
+        let content = std::fs::read_to_string(&path)?;
 
         let escaped_version = escape(&version);
         let pattern = Regex::new(&format!(
@@ -31,12 +31,9 @@ impl Changelog {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| {
                 anyhow::anyhow!(
-                    "✗ changelog section for {} not found in CHANGELOG.md
-  add the following to your changelog and re-run:
-  ## [{}]
-  ### Features
-  - ...",
+                    "✗ changelog section for {} not found in {}\n  add the following to your changelog and re-run:\n  ## [{}]\n  ### Features\n  - ...",
                     version,
+                    path.display(),
                     version
                 )
             })?;
