@@ -74,6 +74,7 @@ jobs:
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_name }}
+          if-no-files-found: error
 
   release:
     needs: build
@@ -116,3 +117,4 @@ jobs:
           tag_name: ${{ github.ref_name }}
           body: ${{ steps.body.outputs.body }}
           files: artifacts/**/*
+          fail_on_unmatched_files: true

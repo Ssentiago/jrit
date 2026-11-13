@@ -230,6 +230,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
             let mut m = IndexMap::new();
             m.insert("name".into(), "${{ matrix.os }}-artifact".into());
             m.insert("path".into(), format!("{}.exe", params.artifact_name));
+            m.insert("if-no-files-found".into(), "error".into());
             m
         }),
         env: None,
@@ -242,6 +243,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
             let mut m = IndexMap::new();
             m.insert("name".into(), "${{ matrix.os }}-artifact".into());
             m.insert("path".into(), params.artifact_name.clone());
+            m.insert("if-no-files-found".into(), "error".into());
             m
         }),
         env: None,
@@ -298,6 +300,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
                         m.insert("name".into(), "Release ${{ github.ref_name }}".into());
                         m.insert("tag_name".into(), "${{ github.ref_name }}".into());
                         m.insert("files".into(), "artifacts/**/*".into());
+                        m.insert("fail_on_unmatched_files".into(), "true".into());
                         m
                     }),
                     env: None,
