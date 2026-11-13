@@ -5,8 +5,16 @@ use serde::Serialize;
 pub struct Workflow {
     pub name: String,
     pub on: On,
+    pub concurrency: Concurrency,
     pub permissions: IndexMap<String, String>,
     pub jobs: IndexMap<String, Job>,
+}
+
+#[derive(Serialize)]
+pub struct Concurrency {
+    pub group: String,
+    #[serde(rename = "cancel-in-progress")]
+    pub cancel_in_progress: bool,
 }
 
 #[derive(Serialize)]
@@ -27,6 +35,8 @@ pub struct Job {
     pub strategy: Option<Strategy>,
     #[serde(rename = "runs-on")]
     pub runs_on: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<IndexMap<String, String>>,
     pub steps: Vec<Step>,
 }
 
@@ -295,6 +305,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
                 },
             }),
             runs_on: "${{ matrix.os }}".into(),
+            permissions: None,
             steps,
         },
     );
@@ -305,6 +316,11 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
             needs: Some(vec!["build".into()]),
             strategy: None,
             runs_on: "ubuntu-latest".into(),
+            permissions: Some({
+                let mut m = IndexMap::new();
+                m.insert("contents".into(), "write".into());
+                m
+            }),
             steps: vec![
                 Step::Uses(UsesStep {
                     name: "Download all artifacts".into(),
@@ -336,7 +352,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
     );
 
     let mut permissions = IndexMap::new();
-    permissions.insert("contents".into(), "write".into());
+    permissions.insert("contents".into(), "read".into());
 
     let workflow = Workflow {
         name: format!("Release {}", params.project_name),
@@ -344,6 +360,10 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
             push: PushTrigger {
                 tags: vec!["*".into()],
             },
+        },
+        concurrency: Concurrency {
+            group: "release".into(),
+            cancel_in_progress: false,
         },
         permissions,
         jobs,
