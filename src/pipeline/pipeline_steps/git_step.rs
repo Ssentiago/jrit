@@ -1,4 +1,4 @@
-use crate::pipeline::{PipelineStep, Rollback};
+use crate::pipeline::{Pipeline, PipelineStep, Rollback};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Command;
@@ -46,6 +46,19 @@ impl GitOps {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
+    pub fn has_staged_changes() -> Result<bool> {
+        let status = Command::new("git")
+            .args(["diff", "--cached", "--quiet"])
+            .status()
+            .context("failed to spawn git diff --cached --quiet")?;
+
+        match status.code() {
+            Some(0) => Ok(false),
+            Some(1) => Ok(true),
+            _ => anyhow::bail!("git diff --cached --quiet failed with {}", status),
+        }
+    }
+
     pub fn checkout(branch: &str) -> Result<()> {
         Self::run(&["checkout", branch])
     }
@@ -90,6 +103,9 @@ impl CommitStep {
                     let mut add_args = vec!["add"];
                     add_args.extend(files.iter().copied());
                     GitOps::run(&add_args)?;
+                    if !GitOps::has_staged_changes()? {
+                        return Ok(Pipeline::no_rollback());
+                    }
                     GitOps::run(&["commit", "-m", &self.params.message])?;
                     GitOps::run(&["push", "origin", &branch])?;
                     let rollback: Rollback = Box::new(move || {
