@@ -5,8 +5,19 @@ use semver::Version;
 pub struct Interactive;
 
 impl Interactive {
+    pub fn parse_version_tag(tag: &str) -> Option<Version> {
+        let trimmed = tag.trim();
+        let stripped = trimmed
+            .strip_prefix('v')
+            .or_else(|| trimmed.strip_prefix('V'))
+            .unwrap_or(trimmed);
+        Version::parse(stripped).ok()
+    }
+
     pub fn version_menu(tags: &[String], current: &str) -> Result<String> {
-        let parsed = Version::parse(current)?;
+        let Some(parsed) = Self::parse_version_tag(current) else {
+            bail!("current tag '{current}' is not a valid semver version");
+        };
         let (major, minor, patch) = (parsed.major, parsed.minor, parsed.patch);
 
         let patch_s = format!("Patch (bug fixes): {major}.{minor}.{}", patch + 1);
@@ -61,7 +72,7 @@ impl Interactive {
         let current_parsed = if is_first {
             None
         } else {
-            Some(Version::parse(current)?)
+            Self::parse_version_tag(current)
         };
         let tags = tags.to_vec();
 
@@ -75,7 +86,11 @@ impl Interactive {
                         "Invalid semver format (e.g. 1.2.3)".into(),
                     ));
                 };
-                if tags.contains(&v.to_string()) {
+                if tags
+                    .iter()
+                    .filter_map(|t| Self::parse_version_tag(t))
+                    .any(|t| t == parsed)
+                {
                     return Ok(inquire::validator::Validation::Invalid(
                         "Version already exists.".into(),
                     ));

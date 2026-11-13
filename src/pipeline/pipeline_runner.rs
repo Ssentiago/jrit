@@ -42,7 +42,11 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
             |ctx| {
                 Box::pin(async move {
                     let version = loop {
-                        let v = if let Some(latest) = ctx.tags.first() {
+                        let current = ctx
+                            .tags
+                            .iter()
+                            .find(|t| Interactive::parse_version_tag(t).is_some());
+                        let v = if let Some(latest) = current {
                             Interactive::version_menu(&ctx.tags, latest)
                         } else {
                             Interactive::input_version(&ctx.tags, "", true)
