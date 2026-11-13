@@ -1,3 +1,4 @@
+use crate::pipeline::UserInterrupt;
 use anyhow::{Result, bail};
 use inquire::{InquireError, Select, Text};
 use semver::Version;
@@ -5,6 +6,14 @@ use semver::Version;
 pub struct Interactive;
 
 impl Interactive {
+    fn map_prompt<T>(result: std::result::Result<T, InquireError>) -> Result<T> {
+        match result {
+            Ok(v) => Ok(v),
+            Err(InquireError::OperationInterrupted) => Err(UserInterrupt.into()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub fn parse_version_tag(tag: &str) -> Option<Version> {
         let trimmed = tag.trim();
         let stripped = trimmed
@@ -37,11 +46,13 @@ impl Interactive {
         ];
 
         loop {
-            let answer = Select::new(
-                &format!("Current version: {current}. Select action:"),
-                options.clone(),
-            )
-            .prompt()?;
+            let answer = Self::map_prompt(
+                Select::new(
+                    &format!("Current version: {current}. Select action:"),
+                    options.clone(),
+                )
+                .prompt(),
+            )?;
 
             if answer == patch_s {
                 return Ok(format!("{major}.{minor}.{}", patch + 1));
@@ -64,7 +75,11 @@ impl Interactive {
             } else {
                 println!("Previous versions:\n  {}", tags.join("\n  "));
             }
-            let _ = Text::new("Press Enter to continue...").prompt();
+            if let Err(e) = Text::new("Press Enter to continue...").prompt() {
+                if matches!(e, InquireError::OperationInterrupted) {
+                    return Err(UserInterrupt.into());
+                }
+            }
         }
     }
 
@@ -76,43 +91,37 @@ impl Interactive {
         };
         let tags = tags.to_vec();
 
-        let version = match Text::new("Enter new version (semver) or leave empty to exit:")
-            .with_validator(move |v: &str| {
-                if v.trim().is_empty() {
-                    return Ok(inquire::validator::Validation::Valid);
-                }
-                let Ok(parsed) = Version::parse(v) else {
-                    return Ok(inquire::validator::Validation::Invalid(
-                        "Invalid semver format (e.g. 1.2.3)".into(),
-                    ));
-                };
-                if tags
-                    .iter()
-                    .filter_map(|t| Self::parse_version_tag(t))
-                    .any(|t| t == parsed)
-                {
-                    return Ok(inquire::validator::Validation::Invalid(
-                        "Version already exists.".into(),
-                    ));
-                }
-                if let Some(ref cur) = current_parsed {
-                    if &parsed < cur {
+        let version = Self::map_prompt(
+            Text::new("Enter new version (semver) or leave empty to exit:")
+                .with_validator(move |v: &str| {
+                    if v.trim().is_empty() {
+                        return Ok(inquire::validator::Validation::Valid);
+                    }
+                    let Ok(parsed) = Version::parse(v) else {
                         return Ok(inquire::validator::Validation::Invalid(
-                            format!("Must be greater than current version {cur}").into(),
+                            "Invalid semver format (e.g. 1.2.3)".into(),
+                        ));
+                    };
+                    if tags
+                        .iter()
+                        .filter_map(|t| Self::parse_version_tag(t))
+                        .any(|t| t == parsed)
+                    {
+                        return Ok(inquire::validator::Validation::Invalid(
+                            "Version already exists.".into(),
                         ));
                     }
-                }
-                Ok(inquire::validator::Validation::Valid)
-            })
-            .prompt()
-        {
-            Ok(v) => v,
-            Err(InquireError::OperationInterrupted) => {
-                println!("\nSee you later!");
-                std::process::exit(0);
-            }
-            Err(e) => return Err(e.into()),
-        };
+                    if let Some(ref cur) = current_parsed {
+                        if &parsed < cur {
+                            return Ok(inquire::validator::Validation::Invalid(
+                                format!("Must be greater than current version {cur}").into(),
+                            ));
+                        }
+                    }
+                    Ok(inquire::validator::Validation::Valid)
+                })
+                .prompt(),
+        )?;
 
         if version.trim().is_empty() {
             bail!("exit");
@@ -122,8 +131,9 @@ impl Interactive {
 
     pub fn confirm_version(version: &str) -> Result<ConfirmAction> {
         let options = vec!["Yes", "No", "Retry"];
-        let answer =
-            Select::new(&format!("Selected version: {version}. Continue?"), options).prompt()?;
+        let answer = Self::map_prompt(
+            Select::new(&format!("Selected version: {version}. Continue?"), options).prompt(),
+        )?;
 
         match answer {
             "Yes" => Ok(ConfirmAction::Yes),
@@ -135,8 +145,9 @@ impl Interactive {
 
     pub fn select_branch(allowed: &[String]) -> Result<&str> {
         let opts: Vec<&str> = allowed.iter().map(|s| s.as_str()).collect();
-        let answer =
-            Select::new("Current branch is not allowed. Select target branch:", opts).prompt()?;
+        let answer = Self::map_prompt(
+            Select::new("Current branch is not allowed. Select target branch:", opts).prompt(),
+        )?;
         Ok(answer)
     }
 }

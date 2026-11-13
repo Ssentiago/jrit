@@ -11,6 +11,17 @@ use std::pin::Pin;
 pub type Rollback = Box<dyn FnOnce() -> Result<()>>;
 pub type StepFuture<'a> = Pin<Box<dyn Future<Output = Result<Rollback>> + 'a>>;
 
+#[derive(Debug)]
+pub struct UserInterrupt;
+
+impl std::fmt::Display for UserInterrupt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "interrupted by user")
+    }
+}
+
+impl std::error::Error for UserInterrupt {}
+
 pub struct PipelineStep {
     pub name: String,
     pub run: Box<dyn for<'a> FnOnce(&'a mut AppContext) -> StepFuture<'a>>,
@@ -109,6 +120,14 @@ impl Pipeline {
                     }
                 }
                 Err(e) => {
+                    if e.is::<UserInterrupt>() {
+                        println!(
+                            "{} Interrupted, reverting completed steps...",
+                            "!".yellow().bold()
+                        );
+                        Self::roll_back(rollbacks);
+                        return Ok(());
+                    }
                     println!("{} {} — {e:#}", "✗".red(), step.name.red());
                     println!("{} Rolling back...", "!".yellow().bold());
                     Self::roll_back(rollbacks);
