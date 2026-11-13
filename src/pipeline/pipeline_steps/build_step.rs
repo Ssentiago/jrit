@@ -1,5 +1,5 @@
 use crate::config::{Component, Config};
-use crate::pipeline::{Pipeline, PipelineStep, Rollback};
+use crate::pipeline::{Pipeline, PipelineStep};
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,18 +10,11 @@ use zip::write::FileOptions;
 pub struct Builder {
     config: Config,
     root: PathBuf,
-    tmp_dir: tempfile::TempDir,
 }
 
 impl Builder {
-    pub fn new(config: Config, root: PathBuf) -> Result<Self> {
-        let tmp_dir = tempfile::TempDir::new()?;
-
-        Ok(Self {
-            config,
-            root,
-            tmp_dir,
-        })
+    pub fn new(config: Config, root: PathBuf) -> Self {
+        Self { config, root }
     }
 
     pub fn build_all(&self) -> Result<Vec<BuiltArtifact>> {
@@ -57,17 +50,20 @@ impl Builder {
                 .with_context(|| format!("Failed to archive '{}'", artifact_path.display()))?;
             vec![zip_path]
         } else if artifact_path.is_dir() {
-            let mut paths = Vec::new();
+            let mut entries = Vec::new();
             for entry in fs::read_dir(&artifact_path)
                 .with_context(|| format!("Cannot read artifact dir: {}", artifact_path.display()))?
             {
-                let entry = entry?;
-                let path = entry.path();
+                entries.push(entry?.path());
+            }
+
+            let mut paths = Vec::new();
+            for path in entries {
                 if path.is_file() {
                     paths.push(path);
                 } else if path.is_dir() {
                     let zip_name = format!("{}.zip", path.file_name().unwrap().to_string_lossy());
-                    let zip_path = artifact_path.join(zip_name);
+                    let zip_path = component_path.join(zip_name);
                     Self::zip_dir(&path, &zip_path)
                         .with_context(|| format!("Failed to archive '{}'", path.display()))?;
                     paths.push(zip_path);
@@ -106,6 +102,16 @@ impl Builder {
     }
 
     fn zip_dir(src: &Path, dst: &Path) -> Result<()> {
+        let entries = if src.is_dir() {
+            let mut entries = Vec::new();
+            for entry in walkdir::WalkDir::new(src).min_depth(1) {
+                entries.push(entry?.into_path());
+            }
+            entries
+        } else {
+            Vec::new()
+        };
+
         let file = fs::File::create(dst)
             .with_context(|| format!("Cannot create zip: {}", dst.display()))?;
 
@@ -121,13 +127,11 @@ impl Builder {
             std::io::copy(&mut f, &mut zip)?;
         } else {
             let base = src.parent().unwrap_or(src);
-            for entry in walkdir::WalkDir::new(src).min_depth(1) {
-                let entry = entry?;
-                let path = entry.path();
+            for path in entries {
                 let name = path.strip_prefix(base)?;
                 if path.is_file() {
                     zip.start_file(name.to_string_lossy(), options)?;
-                    let mut f = fs::File::open(path)?;
+                    let mut f = fs::File::open(&path)?;
                     std::io::copy(&mut f, &mut zip)?;
                 } else if path.is_dir() {
                     zip.add_directory(name.to_string_lossy(), options)?;

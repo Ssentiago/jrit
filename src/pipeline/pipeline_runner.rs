@@ -212,7 +212,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         return Ok(Pipeline::no_rollback());
                     }
                     let root = ctx.root.as_ref().unwrap();
-                    let builder = build_step::Builder::new(config.clone(), root.clone())?;
+                    let builder = build_step::Builder::new(config.clone(), root.clone());
                     ctx.artifacts = builder.build_all()?;
                     Ok(Pipeline::no_rollback())
                 })
