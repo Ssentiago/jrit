@@ -190,22 +190,25 @@ pub async fn run_init() -> anyhow::Result<()> {
                 .with_default(default_build)
                 .prompt()?;
 
+            let binary_name = std::path::Path::new(default_artifact)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| "app".to_string());
+
             let artifact_name = out
                 .components
                 .first()
-                .map(|c| {
-                    std::path::Path::new(&c.artifact)
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string()
-                })
-                .unwrap_or("app".to_string());
+                .and_then(|c| std::path::Path::new(&c.artifact).file_name())
+                .map(|n| n.to_string_lossy().to_string())
+                .filter(|n| !n.is_empty())
+                .unwrap_or_else(|| "app".to_string());
 
             let content = ci_gen::generate_workflow(CiGenParams {
                 project_name: out.project.name.clone(),
                 build_command,
                 artifact_name,
+                binary_name,
                 targets,
                 setup_steps,
             })?;

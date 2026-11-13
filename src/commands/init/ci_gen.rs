@@ -176,18 +176,18 @@ pub struct CiGenParams {
     pub project_name: String,
     pub build_command: String,
     pub artifact_name: String,
+    pub binary_name: String,
     pub targets: Vec<Target>,
     pub setup_steps: Vec<SetupStep>,
 }
 
 pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
     let has_mac = params.targets.iter().any(|t| t.os == "macos-latest");
-    let binary = params
-        .artifact_name
-        .strip_suffix(".exe")
-        .unwrap_or(&params.artifact_name)
-        .to_string();
-    let windows_binary = format!("{}.exe", binary);
+    let windows_name = if params.artifact_name.ends_with(".exe") {
+        params.artifact_name.clone()
+    } else {
+        format!("{}.exe", params.artifact_name)
+    };
 
     let mut steps: Vec<Step> = vec![Step::Uses(UsesStep {
         name: "Checkout".into(),
@@ -208,11 +208,12 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
             run: format!(
                 "{cmd} --target x86_64-apple-darwin\n\
                  {cmd} --target aarch64-apple-darwin\n\
-                 lipo -create -output {binary} \
+                 lipo -create -output {artifact} \
                    target/x86_64-apple-darwin/release/{binary} \
                    target/aarch64-apple-darwin/release/{binary}",
                 cmd = params.build_command,
-                binary = binary,
+                artifact = params.artifact_name,
+                binary = params.binary_name,
             ),
         }));
         steps.push(Step::Run(RunStep {
@@ -232,14 +233,19 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
         name: "Stage artifact (Windows)".into(),
         condition: Some("matrix.os == 'windows-latest'".into()),
         run: format!(
-            "copy target\\release\\{win} {win}",
-            win = windows_binary,
+            "copy target\\release\\{bin}.exe {win}",
+            bin = params.binary_name,
+            win = windows_name,
         ),
     }));
     steps.push(Step::Run(RunStep {
         name: "Stage artifact".into(),
         condition: Some("matrix.os != 'windows-latest' && matrix.os != 'macos-latest'".into()),
-        run: format!("cp target/release/{binary} {binary}", binary = binary),
+        run: format!(
+            "cp target/release/{bin} {artifact}",
+            bin = params.binary_name,
+            artifact = params.artifact_name,
+        ),
     }));
 
     steps.push(Step::Uses(UsesStep {
@@ -249,7 +255,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
         with: Some({
             let mut m = IndexMap::new();
             m.insert("name".into(), "${{ matrix.os }}-artifact".into());
-            m.insert("path".into(), windows_binary.clone());
+            m.insert("path".into(), windows_name.clone());
             m.insert("if-no-files-found".into(), "error".into());
             m
         }),
@@ -262,7 +268,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
         with: Some({
             let mut m = IndexMap::new();
             m.insert("name".into(), "${{ matrix.os }}-artifact".into());
-            m.insert("path".into(), binary.clone());
+            m.insert("path".into(), params.artifact_name.clone());
             m.insert("if-no-files-found".into(), "error".into());
             m
         }),
