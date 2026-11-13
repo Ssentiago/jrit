@@ -46,16 +46,18 @@ impl GitOps {
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
     }
 
-    pub fn has_staged_changes() -> Result<bool> {
+    pub fn has_staged_changes(files: &[&str]) -> Result<bool> {
+        let mut args = vec!["diff", "--cached", "--quiet", "--"];
+        args.extend_from_slice(files);
         let status = Command::new("git")
-            .args(["diff", "--cached", "--quiet"])
+            .args(&args)
             .status()
-            .context("failed to spawn git diff --cached --quiet")?;
+            .with_context(|| format!("failed to spawn git {:?}", args))?;
 
         match status.code() {
             Some(0) => Ok(false),
             Some(1) => Ok(true),
-            _ => anyhow::bail!("git diff --cached --quiet failed with {}", status),
+            _ => anyhow::bail!("git {:?} failed with {}", args, status),
         }
     }
 
@@ -93,24 +95,36 @@ impl CommitStep {
             run: Box::new(move |_ctx| {
                 Box::pin(async move {
                     let branch = self.params.branch.clone();
-                    GitOps::run(&["reset"])?;
-                    let files: Vec<&str> = self
+                    let files: Vec<String> = self
                         .params
                         .files
                         .iter()
-                        .map(|p| p.to_str().expect("non-utf8 path"))
+                        .map(|p| p.to_str().expect("non-utf8 path").to_string())
                         .collect();
-                    let mut add_args = vec!["add"];
-                    add_args.extend(files.iter().copied());
+                    let file_refs: Vec<&str> = files.iter().map(String::as_str).collect();
+                    let mut add_args = vec!["add", "--"];
+                    add_args.extend(file_refs.iter().copied());
                     GitOps::run(&add_args)?;
-                    if !GitOps::has_staged_changes()? {
+                    if !GitOps::has_staged_changes(&file_refs)? {
                         return Ok(Pipeline::no_rollback());
                     }
-                    GitOps::run(&["commit", "-m", &self.params.message])?;
+                    let mut commit_args = vec!["commit", "-m", &self.params.message, "--"];
+                    commit_args.extend(file_refs.iter().copied());
+                    GitOps::run(&commit_args)?;
                     GitOps::run(&["push", "origin", &branch])?;
+                    let commit = GitOps::run_output(&["rev-parse", "HEAD"])?;
                     let rollback: Rollback = Box::new(move || {
-                        GitOps::run(&["reset", "--hard", "HEAD~1"])?;
-                        GitOps::run(&["push", "--force", "origin", &branch])?;
+                        let head = GitOps::run_output(&["rev-parse", "HEAD"])?;
+                        if head != commit {
+                            anyhow::bail!("HEAD is {head}, expected {commit}; refusing to roll back");
+                        }
+                        let parent = format!("{commit}^");
+                        GitOps::run(&["reset", "--soft", &parent])?;
+                        let mut restore_args =
+                            vec!["restore", "--source", &parent, "--staged", "--worktree", "--"];
+                        restore_args.extend(files.iter().map(String::as_str));
+                        GitOps::run(&restore_args)?;
+                        GitOps::run(&["push", "--force-with-lease", "origin", &branch])?;
                         Ok(())
                     });
                     Ok(rollback)
