@@ -210,11 +210,18 @@ pub fn open_in_editor(content: &str) -> Result<String> {
         .or_else(|_| std::env::var("VISUAL"))
         .unwrap_or_else(|_| "vi".to_string());
 
+    let mut parts = editor.split_whitespace();
+    let program = parts
+        .next()
+        .context("EDITOR is empty or whitespace only")?;
+    let args: Vec<&str> = parts.collect();
+
     let mut tmp = tempfile::NamedTempFile::new()?;
     std::io::Write::write_all(&mut tmp, content.as_bytes())?;
     let tmp_path = tmp.path();
 
-    let status = std::process::Command::new(&editor)
+    let status = std::process::Command::new(program)
+        .args(&args)
         .arg(tmp_path)
         .status()
         .with_context(|| format!("failed to open editor: {editor}"))?;
@@ -233,7 +240,11 @@ fn prepend_to_changelog(content: &str, changelog_path: &Path) -> Result<()> {
         String::new()
     };
 
-    let combined = format!("{}\n\n{}", content.trim(), existing);
+    let combined = if existing.trim().is_empty() {
+        format!("{}\n", content.trim())
+    } else {
+        format!("{}\n\n{}", content.trim(), existing)
+    };
     std::fs::write(changelog_path, combined)?;
 
     Ok(())
