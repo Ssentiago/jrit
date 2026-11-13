@@ -4,6 +4,11 @@ use reqwest::Response;
 use self_replace;
 use std::io::Write;
 
+fn parse_version(tag: &str) -> Result<semver::Version> {
+    let tag = tag.strip_prefix('v').unwrap_or(tag);
+    Ok(semver::Version::parse(tag)?)
+}
+
 pub async fn main() -> Result<()> {
     let current_version = semver::Version::parse(env!("CARGO_PKG_VERSION"))?;
 
@@ -17,7 +22,7 @@ pub async fn main() -> Result<()> {
         .get_latest()
         .await?;
 
-    let latest_release_tag = semver::Version::parse(&latest_release.tag_name)?;
+    let latest_release_tag = parse_version(&latest_release.tag_name)?;
 
     if latest_release_tag > current_version {
         println!("new version available: {current_version} → {latest_release_tag}");
@@ -46,7 +51,11 @@ pub async fn main() -> Result<()> {
         println!("downloading...");
 
         let response: Response = reqwest::get(asset.browser_download_url.as_str()).await?;
+        let response = response.error_for_status()?;
         let bytes = response.bytes().await?;
+        if bytes.is_empty() {
+            bail!("downloaded release asset is empty, binary left untouched");
+        }
         let mut tmp = tempfile::NamedTempFile::new()?;
         tmp.write_all(&bytes)?;
         self_replace::self_replace(tmp.path())?;
