@@ -1,4 +1,5 @@
 use crate::pipeline::{PipelineStep, Rollback};
+use super::interactive_step::Interactive;
 use anyhow::{Context, Result, bail};
 use git_cliff_core::{
     changelog::Changelog,
@@ -91,6 +92,29 @@ impl ChangelogGen {
     }
 }
 
+fn previous_release_tag(root: &Path) -> Result<Option<String>> {
+    let output = std::process::Command::new("git")
+        .args(["tag", "-l", "--merged", "HEAD"])
+        .current_dir(root)
+        .output()
+        .context("failed to list git tags")?;
+
+    if !output.status.success() {
+        bail!(
+            "git tag failed with {}\nstderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let tags = String::from_utf8(output.stdout)?;
+    Ok(tags
+        .lines()
+        .filter_map(|tag| Interactive::parse_version_tag(tag).map(|version| (version, tag)))
+        .max_by(|a, b| a.0.cmp(&b.0))
+        .map(|(_, tag)| tag.to_string()))
+}
+
 fn generate_conventional(root: &Path, version: &str, repo_path: &str) -> Result<String> {
     let repo = Repository::init(root.to_path_buf())?;
 
@@ -145,8 +169,7 @@ fn generate_conventional(root: &Path, version: &str, repo_path: &str) -> Result<
         bump: Default::default(),
     };
 
-    let tags = repo.tags(&config.git.tag_pattern, false, false)?;
-    let range = tags.last().map(|(tag, _)| format!("{tag}..HEAD"));
+    let range = previous_release_tag(root)?.map(|tag| format!("{tag}..HEAD"));
 
     let git_commits = repo.commits(range.as_deref(), None, None, false)?;
     let commits: Vec<Commit> = git_commits.iter().map(Commit::from).collect();
@@ -167,16 +190,8 @@ fn generate_conventional(root: &Path, version: &str, repo_path: &str) -> Result<
 }
 
 fn generate_raw(root: &Path, version: &str) -> Result<String> {
-    let tags_out = std::process::Command::new("git")
-        .args(["tag", "-l", "--sort=-version:refname"])
-        .current_dir(root)
-        .output()?;
-
-    let tags = String::from_utf8(tags_out.stdout)?;
-    let last_tag = tags.lines().next();
-
-    let range_arg = last_tag
-        .map(|t| format!("{t}..HEAD"))
+    let range_arg = previous_release_tag(root)?
+        .map(|tag| format!("{tag}..HEAD"))
         .unwrap_or_else(|| "HEAD".to_string());
 
     let output = std::process::Command::new("git")
@@ -223,3 +238,4 @@ fn prepend_to_changelog(content: &str, changelog_path: &Path) -> Result<()> {
 
     Ok(())
 }
+
