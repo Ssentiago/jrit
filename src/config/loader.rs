@@ -49,6 +49,11 @@ fn validate_config(config: &Config) -> anyhow::Result<()> {
     if p.branches.is_empty() {
         errors.push("project.branches is empty".into());
     }
+    for (i, branch) in p.branches.iter().enumerate() {
+        if branch.trim().is_empty() {
+            errors.push(format!("project.branches[{i}] is empty"));
+        }
+    }
     if config.components.is_empty() {
         errors.push("no [[components]] defined".into());
     }

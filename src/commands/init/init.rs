@@ -19,7 +19,11 @@ pub async fn run_init() -> anyhow::Result<()> {
     let branches = Text::new("Allowed branches (comma-separated):")
         .with_default("main,master")
         .prompt()?;
-    let branches: Vec<String> = branches.split(',').map(|s| s.trim().to_string()).collect();
+    let branches: Vec<String> = branches
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
 
     let changelog_type = Select::new(
         "Changelog type:",
