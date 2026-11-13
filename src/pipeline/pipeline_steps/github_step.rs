@@ -34,6 +34,14 @@ pub async fn get_token() -> Result<String> {
         }
     }
 
+    for var in ["GITHUB_TOKEN", "GH_TOKEN"] {
+        if let Ok(token) = std::env::var(var) {
+            if !token.is_empty() {
+                return Ok(token);
+            }
+        }
+    }
+
     // fallback: ~/.config/jrit/config.toml
     let config_path = dirs::config_dir()
         .context("Cannot resolve config dir")?
@@ -79,6 +87,19 @@ fn release_title(name: &str, tag: &str) -> String {
     }
 }
 
+fn build_checksum_file(artifacts: &[PathBuf]) -> Result<String> {
+    let mut out = String::new();
+    for artifact in artifacts {
+        let name = artifact
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        out.push_str(&format!("{}  {}\n", sha256_of(artifact)?, name));
+    }
+    Ok(out)
+}
+
 async fn upload_assets(
     octocrab: &Octocrab,
     params: &ReleaseParams,
@@ -102,6 +123,16 @@ async fn upload_assets(
             .await
             .with_context(|| format!("Failed to upload {file_name}"))?;
     }
+
+    let checksums = build_checksum_file(&params.artifacts)?;
+    octocrab
+        .repos(&params.repo_owner, &params.repo_name)
+        .releases()
+        .upload_asset(release_id, "sha256sums.txt", Bytes::from(checksums))
+        .send()
+        .await
+        .context("Failed to upload sha256sums.txt")?;
+
     Ok(())
 }
 
