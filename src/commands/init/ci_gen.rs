@@ -182,6 +182,12 @@ pub struct CiGenParams {
 
 pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
     let has_mac = params.targets.iter().any(|t| t.os == "macos-latest");
+    let binary = params
+        .artifact_name
+        .strip_suffix(".exe")
+        .unwrap_or(&params.artifact_name)
+        .to_string();
+    let windows_binary = format!("{}.exe", binary);
 
     let mut steps: Vec<Step> = vec![Step::Uses(UsesStep {
         name: "Checkout".into(),
@@ -202,11 +208,11 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
             run: format!(
                 "{cmd} --target x86_64-apple-darwin\n\
                  {cmd} --target aarch64-apple-darwin\n\
-                 lipo -create -output {artifact} \
-                   target/x86_64-apple-darwin/release/{artifact} \
-                   target/aarch64-apple-darwin/release/{artifact}",
+                 lipo -create -output {binary} \
+                   target/x86_64-apple-darwin/release/{binary} \
+                   target/aarch64-apple-darwin/release/{binary}",
                 cmd = params.build_command,
-                artifact = params.artifact_name,
+                binary = binary,
             ),
         }));
         steps.push(Step::Run(RunStep {
@@ -222,6 +228,20 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
         }));
     }
 
+    steps.push(Step::Run(RunStep {
+        name: "Stage artifact (Windows)".into(),
+        condition: Some("matrix.os == 'windows-latest'".into()),
+        run: format!(
+            "copy target\\release\\{win} {win}",
+            win = windows_binary,
+        ),
+    }));
+    steps.push(Step::Run(RunStep {
+        name: "Stage artifact".into(),
+        condition: Some("matrix.os != 'windows-latest' && matrix.os != 'macos-latest'".into()),
+        run: format!("cp target/release/{binary} {binary}", binary = binary),
+    }));
+
     steps.push(Step::Uses(UsesStep {
         name: "Upload artifact (Windows)".into(),
         uses: "actions/upload-artifact@v4".into(),
@@ -229,7 +249,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
         with: Some({
             let mut m = IndexMap::new();
             m.insert("name".into(), "${{ matrix.os }}-artifact".into());
-            m.insert("path".into(), format!("{}.exe", params.artifact_name));
+            m.insert("path".into(), windows_binary.clone());
             m.insert("if-no-files-found".into(), "error".into());
             m
         }),
@@ -242,7 +262,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
         with: Some({
             let mut m = IndexMap::new();
             m.insert("name".into(), "${{ matrix.os }}-artifact".into());
-            m.insert("path".into(), params.artifact_name.clone());
+            m.insert("path".into(), binary.clone());
             m.insert("if-no-files-found".into(), "error".into());
             m
         }),
