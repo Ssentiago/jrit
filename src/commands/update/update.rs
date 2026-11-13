@@ -1,7 +1,5 @@
 use anyhow::{Result, bail};
-use octocrab;
 use reqwest::Response;
-use self_replace;
 use std::io::Write;
 
 fn parse_version(tag: &str) -> Result<semver::Version> {

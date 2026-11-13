@@ -1,5 +1,5 @@
 use crate::config;
-use crate::pipeline::{AppContext, Pipeline, PipelineStep, Rollback, StepFuture};
+use crate::pipeline::{Pipeline, PipelineStep};
 
 pub fn step() -> PipelineStep {
     PipelineStep {

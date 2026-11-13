@@ -126,7 +126,7 @@ pub async fn run_init() -> anyhow::Result<()> {
         }
     }
 
-    let mut out = Config {
+    let out = Config {
         project: Project {
             name,
             repo,
