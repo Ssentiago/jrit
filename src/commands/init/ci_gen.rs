@@ -104,17 +104,17 @@ impl SetupStep {
     fn to_workflow_steps(&self) -> Vec<Step> {
         match self {
             Self::RustToolchain => vec![
+                Step::Uses(UsesStep {
+                    name: "Install Rust toolchain".into(),
+                    uses: "dtolnay/rust-toolchain@stable".into(),
+                    condition: None,
+                    with: None,
+                    env: None,
+                }),
                 Step::Run(RunStep {
                     name: "Install Rust targets (macOS universal)".into(),
                     condition: Some("matrix.os == 'macos-latest'".into()),
                     run: "rustup target add x86_64-apple-darwin aarch64-apple-darwin".into(),
-                }),
-                Step::Uses(UsesStep {
-                    name: "Install Rust toolchain".into(),
-                    uses: "dtolnay/rust-toolchain@stable".into(),
-                    condition: Some("matrix.os != 'macos-latest'".into()),
-                    with: None,
-                    env: None,
                 }),
             ],
             Self::Bun => vec![Step::Uses(UsesStep {

@@ -3,7 +3,7 @@ name: Release jrit
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 concurrency:
   group: release
@@ -33,13 +33,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Install Rust targets (macOS universal)
         if: matrix.os == 'macos-latest'
         run: rustup target add x86_64-apple-darwin aarch64-apple-darwin
-
-      - name: Install Rust toolchain
-        if: matrix.os != 'macos-latest'
-        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo
         uses: actions/cache@v4
