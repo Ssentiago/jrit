@@ -63,6 +63,25 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
             false,
         )
         .step(
+            "check branch",
+            |ctx| {
+                Box::pin(async move {
+                    let config = ctx.config.as_ref().unwrap();
+                    let branch = GitOps::current_branch()?;
+                    let branch = if !config.project.branches.contains(&branch) {
+                        let selected = Interactive::select_branch(&config.project.branches)?;
+                        GitOps::checkout(selected)?;
+                        selected.to_string()
+                    } else {
+                        branch
+                    };
+                    ctx.branch = Some(branch);
+                    Ok(Pipeline::no_rollback())
+                })
+            },
+            false,
+        )
+        .step(
             "generate changelog",
             |ctx| {
                 Box::pin(async move {
@@ -117,25 +136,6 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         }
                     };
                     ctx.changelog = Some(Changelog::parse(version, changelog_path)?);
-                    Ok(Pipeline::no_rollback())
-                })
-            },
-            false,
-        )
-        .step(
-            "check branch",
-            |ctx| {
-                Box::pin(async move {
-                    let config = ctx.config.as_ref().unwrap();
-                    let branch = GitOps::current_branch()?;
-                    let branch = if !config.project.branches.contains(&branch) {
-                        let selected = Interactive::select_branch(&config.project.branches)?;
-                        GitOps::checkout(selected)?;
-                        selected.to_string()
-                    } else {
-                        branch
-                    };
-                    ctx.branch = Some(branch);
                     Ok(Pipeline::no_rollback())
                 })
             },
