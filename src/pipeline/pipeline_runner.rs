@@ -49,7 +49,10 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         }?;
                         match Interactive::confirm_version(&v)? {
                             ConfirmAction::Yes => break v,
-                            ConfirmAction::No => return Ok(Pipeline::no_rollback()),
+                            ConfirmAction::No => {
+                                ctx.aborted = true;
+                                return Ok(Pipeline::no_rollback());
+                            }
                             ConfirmAction::Retry => {}
                         }
                     };

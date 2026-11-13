@@ -28,6 +28,7 @@ pub struct AppContext {
     pub artifacts: Vec<BuiltArtifact>,
     pub pending_steps: Vec<PipelineStep>,
     pub bumped_files: Vec<PathBuf>,
+    pub aborted: bool,
 }
 
 impl AppContext {
@@ -43,6 +44,7 @@ impl AppContext {
             artifacts: vec![],
             pending_steps: vec![],
             bumped_files: vec![],
+            aborted: false,
         }
     }
 }
@@ -94,6 +96,11 @@ impl Pipeline {
                         println!("{} {}", "✓".green(), step.name.clone().green());
                     }
                     rollbacks.push((step.name, rb));
+                    if ctx.aborted {
+                        println!("{} Release aborted, reverting completed steps...", "!".yellow().bold());
+                        Self::roll_back(rollbacks);
+                        return Ok(());
+                    }
                     if !ctx.pending_steps.is_empty() {
                         let pending = std::mem::take(&mut ctx.pending_steps);
                         for s in pending.into_iter().rev() {
@@ -104,16 +111,20 @@ impl Pipeline {
                 Err(e) => {
                     println!("{} {} — {e:#}", "✗".red(), step.name.red());
                     println!("{} Rolling back...", "!".yellow().bold());
-                    for (name, rb) in rollbacks.into_iter().rev() {
-                        println!("  {} {name}", "<-".yellow());
-                        if let Err(e) = rb() {
-                            eprintln!("  {} rollback failed for '{name}': {e:#}", "!".red());
-                        }
-                    }
+                    Self::roll_back(rollbacks);
                     return Err(e);
                 }
             }
         }
         Ok(())
+    }
+
+    fn roll_back(rollbacks: Vec<(String, Rollback)>) {
+        for (name, rb) in rollbacks.into_iter().rev() {
+            println!("  {} {name}", "<-".yellow());
+            if let Err(e) = rb() {
+                eprintln!("  {} rollback failed for '{name}': {e:#}", "!".red());
+            }
+        }
     }
 }
