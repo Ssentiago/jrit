@@ -71,22 +71,19 @@ fn sha256_of(path: &Path) -> Result<String> {
     Ok(hex::encode(hash))
 }
 
-pub async fn create_release(params: ReleaseParams) -> Result<ReleaseResult> {
-    let token = get_token().await?;
-    let octocrab = Octocrab::builder().personal_token(token).build()?;
+fn release_title(name: &str, tag: &str) -> String {
+    if name.is_empty() {
+        format!("Release {tag}")
+    } else {
+        format!("{name} {tag}")
+    }
+}
 
-    let release = octocrab
-        .repos(&params.repo_owner, &params.repo_name)
-        .releases()
-        .create(&params.tag)
-        .name(&format!("Release {}", params.tag))
-        .body(&params.body)
-        .draft(params.draft)
-        .prerelease(params.prerelease)
-        .send()
-        .await
-        .context("Failed to create GitHub release")?;
-
+async fn upload_assets(
+    octocrab: &Octocrab,
+    params: &ReleaseParams,
+    release_id: u64,
+) -> Result<()> {
     for artifact in &params.artifacts {
         let file_name = artifact
             .file_name()
@@ -100,10 +97,43 @@ pub async fn create_release(params: ReleaseParams) -> Result<ReleaseResult> {
         octocrab
             .repos(&params.repo_owner, &params.repo_name)
             .releases()
-            .upload_asset(release.id.0, &file_name, Bytes::from(bytes))
+            .upload_asset(release_id, &file_name, Bytes::from(bytes))
             .send()
             .await
             .with_context(|| format!("Failed to upload {file_name}"))?;
+    }
+    Ok(())
+}
+
+pub async fn create_release(params: ReleaseParams) -> Result<ReleaseResult> {
+    let token = get_token().await?;
+    let octocrab = Octocrab::builder().personal_token(token).build()?;
+    let repo = octocrab.repos(&params.repo_owner, &params.repo_name);
+    let releases = repo.releases();
+
+    let release = releases
+        .create(&params.tag)
+        .name(&release_title(&params.name, &params.tag))
+        .body(&params.body)
+        .draft(params.draft)
+        .prerelease(params.prerelease)
+        .send()
+        .await
+        .context("Failed to create GitHub release")?;
+
+    if let Err(err) = upload_assets(&octocrab, &params, release.id.0).await {
+        // The pipeline rolls the tag back on failure, so a release left behind
+        // would stay orphaned; drop it before surfacing the upload error.
+        return match releases.delete(release.id.0).await {
+            Ok(()) => Err(err.context(format!(
+                "release {} was deleted after the failed upload",
+                release.id.0
+            ))),
+            Err(delete_err) => Err(err.context(format!(
+                "release {} is still published, delete it manually: {delete_err:#}",
+                release.id.0
+            ))),
+        };
     }
 
     Ok(ReleaseResult {
