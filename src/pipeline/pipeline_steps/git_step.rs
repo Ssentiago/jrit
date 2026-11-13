@@ -99,8 +99,14 @@ impl CommitStep {
                         .params
                         .files
                         .iter()
-                        .map(|p| p.to_str().expect("non-utf8 path").to_string())
-                        .collect();
+                        .map(|p| {
+                            p.to_str()
+                                .map(str::to_string)
+                                .ok_or_else(|| {
+                                    anyhow::anyhow!("path is not valid UTF-8: {}", p.display())
+                                })
+                        })
+                        .collect::<anyhow::Result<_>>()?;
                     let file_refs: Vec<&str> = files.iter().map(String::as_str).collect();
                     let mut add_args = vec!["add", "--"];
                     add_args.extend(file_refs.iter().copied());
