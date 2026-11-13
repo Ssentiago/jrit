@@ -94,10 +94,11 @@ impl Interactive {
         let version = Self::map_prompt(
             Text::new("Enter new version (semver) or leave empty to exit:")
                 .with_validator(move |v: &str| {
-                    if v.trim().is_empty() {
+                    let input = v.trim();
+                    if input.is_empty() {
                         return Ok(inquire::validator::Validation::Valid);
                     }
-                    let Ok(parsed) = Version::parse(v) else {
+                    let Ok(parsed) = Version::parse(input) else {
                         return Ok(inquire::validator::Validation::Invalid(
                             "Invalid semver format (e.g. 1.2.3)".into(),
                         ));
@@ -112,7 +113,7 @@ impl Interactive {
                         ));
                     }
                     if let Some(ref cur) = current_parsed {
-                        if &parsed < cur {
+                        if &parsed <= cur {
                             return Ok(inquire::validator::Validation::Invalid(
                                 format!("Must be greater than current version {cur}").into(),
                             ));
