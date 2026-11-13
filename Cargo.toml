@@ -22,6 +22,7 @@ owo-colors = "4"
 serde_yaml = "0.9"
 self-replace = "1.5.0"
 reqwest = "0.13.3"
+toml_edit = "0.25.19"
 
 [dependencies.rustls]
 version = "0.23"
