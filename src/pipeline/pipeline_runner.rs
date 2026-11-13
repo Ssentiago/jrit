@@ -106,8 +106,9 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         return Ok(Pipeline::no_rollback());
                     }
                     let version = ctx.release_version.as_ref().unwrap();
+                    let root = ctx.root.as_ref().unwrap();
                     let changelog_path = match &config.project.changelog {
-                        Some(p) => p.parse()?,
+                        Some(p) => root.join(p),
                         None => {
                             bail!("changelog path is required when changelog_type is not 'none'")
                         }
@@ -143,6 +144,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                 Box::pin(async move {
                     let config = ctx.config.as_ref().unwrap();
                     let version = ctx.release_version.clone().unwrap();
+                    let root = ctx.root.clone().unwrap();
 
                     let bumpers: Vec<Box<dyn VersionBumper>> = config
                         .components
@@ -154,7 +156,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                                     |vf: &VersionFile| -> anyhow::Result<Box<dyn VersionBumper>> {
                                         let path = PathBuf::from(&vf.file);
                                         let resolved = vf.resolved_path()?;
-                                        let full_path = PathBuf::from(&c.path).join(&vf.file);
+                                        let full_path = root.join(&c.path).join(&vf.file);
                                         let bumper: Box<dyn VersionBumper> = match path
                                             .extension()
                                             .and_then(|e| e.to_str())
@@ -181,7 +183,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                         .flat_map(|c| {
                             c.version_files
                                 .iter()
-                                .map(|vf| PathBuf::from(&c.path).join(&vf.file))
+                                .map(|vf| root.join(&c.path).join(&vf.file))
                         })
                         .collect();
 
@@ -216,12 +218,13 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
                 Box::pin(async move {
                     let version = ctx.release_version.as_ref().unwrap();
                     let branch = ctx.branch.as_ref().unwrap();
+                    let root = ctx.root.clone().unwrap();
 
                     if let Some(ref cf) = ctx.config {
                         if cf.project.changelog_type != "none" {
                             if let Some(ref changelog) = cf.project.changelog {
                                 let step = git_step::CommitStep::new(git_step::CommitParams {
-                                    files: vec![PathBuf::from(changelog)],
+                                    files: vec![root.join(changelog)],
                                     message: "chore: update changelog".to_string(),
                                     branch: branch.clone(),
                                 })
