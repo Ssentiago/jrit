@@ -22,6 +22,21 @@ impl std::fmt::Display for UserInterrupt {
 
 impl std::error::Error for UserInterrupt {}
 
+/// Marker error used to stop the pipeline before any mutating step runs,
+/// either because this was a dry run or because the user declined the plan.
+#[derive(Debug)]
+pub struct PlanStop {
+    pub message: &'static str,
+}
+
+impl std::fmt::Display for PlanStop {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for PlanStop {}
+
 pub struct PipelineStep {
     pub name: String,
     pub run: Box<dyn for<'a> FnOnce(&'a mut AppContext) -> StepFuture<'a>>,
@@ -49,11 +64,13 @@ pub struct AppContext {
     pub release_version: Option<String>,
     pub release_analysis: Option<ReleaseAnalysis>,
     pub branch: Option<String>,
+    pub branch_warning: Option<String>,
     pub changelog: Option<Changelog>,
     pub artifacts: Vec<BuiltArtifact>,
     pub pending_steps: Vec<PipelineStep>,
     pub bumped_files: Vec<PathBuf>,
     pub aborted: bool,
+    pub dry_run: bool,
 }
 
 impl AppContext {
@@ -65,11 +82,13 @@ impl AppContext {
             release_version: None,
             release_analysis: None,
             branch: None,
+            branch_warning: None,
             changelog: None,
             artifacts: vec![],
             pending_steps: vec![],
             bumped_files: vec![],
             aborted: false,
+            dry_run: false,
         }
     }
 }
@@ -126,6 +145,10 @@ impl Pipeline {
                     }
                 }
                 Err(e) => {
+                    if let Some(stop) = e.downcast_ref::<PlanStop>() {
+                        println!("{} {}", "✓".green(), stop.message.green());
+                        return Ok(());
+                    }
                     if e.is::<UserInterrupt>() {
                         println!(
                             "{} Interrupted, reverting completed steps...",

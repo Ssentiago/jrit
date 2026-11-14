@@ -28,6 +28,12 @@ pub struct VersionBumper {
     original_content: Option<String>,
 }
 
+/// The version change a bumper would make to a file.
+pub struct VersionPreview {
+    pub old: String,
+    pub new: String,
+}
+
 impl VersionBumper {
     pub fn from_file(path: PathBuf, fields: Vec<String>) -> Result<Self> {
         let format = VersionFormat::from_path(&path)?;
@@ -39,9 +45,13 @@ impl VersionBumper {
         })
     }
 
+    fn read_content(&self) -> Result<String> {
+        std::fs::read_to_string(&self.path)
+            .with_context(|| format!("failed to read {}", self.path.display()))
+    }
+
     fn read_original(&mut self) -> Result<String> {
-        let content = std::fs::read_to_string(&self.path)
-            .with_context(|| format!("failed to read {}", self.path.display()))?;
+        let content = self.read_content()?;
         self.original_content = Some(content.clone());
         Ok(content)
     }
@@ -54,11 +64,39 @@ impl VersionBumper {
         }
     }
 
-    fn bump_toml(&self, content: &str, new_version: &str) -> Result<()> {
-        let mut doc: DocumentMut = content
-            .parse()
-            .with_context(|| format!("failed to parse TOML: {}", self.path.display()))?;
+    /// Computes the version change for the file without writing anything.
+    pub fn preview(&self, new_version: &str) -> Result<VersionPreview> {
+        let content = self.read_content()?;
+        let old = match self.format {
+            VersionFormat::Toml => {
+                let mut doc: DocumentMut = content
+                    .parse()
+                    .with_context(|| format!("failed to parse TOML: {}", self.path.display()))?;
+                let value = self.find_toml_value(&mut doc)?;
+                value
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| value.to_string().trim().to_string())
+            }
+            VersionFormat::Json => {
+                let mut json: JsonValue = serde_json::from_str(&content)
+                    .with_context(|| format!("failed to parse JSON: {}", self.path.display()))?;
+                let value = self.find_json_value(&mut json)?;
+                value
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| value.to_string())
+            }
+        };
+        Ok(VersionPreview {
+            old,
+            new: new_version.to_string(),
+        })
+    }
 
+    /// Navigates to the configured version value, shared by preview and write
+    /// so the two can never look at different fields.
+    fn find_toml_value<'a>(&self, doc: &'a mut DocumentMut) -> Result<&'a mut TomlValue> {
         let (last_field, parents) = self.fields.split_last().with_context(|| {
             format!(
                 "no version path configured for {}",
@@ -66,7 +104,7 @@ impl VersionBumper {
             )
         })?;
 
-        let mut cur: &mut dyn TableLike = &mut *doc;
+        let mut cur: &mut dyn TableLike = &mut **doc;
         for field in parents {
             let item = cur.get_mut(field.as_str()).with_context(|| {
                 format!("field '{}' not found in {}", field, self.path.display())
@@ -83,13 +121,35 @@ impl VersionBumper {
                 self.path.display()
             )
         })?;
+        target.as_value_mut().with_context(|| {
+            format!(
+                "field '{}' in {} is not a value",
+                last_field,
+                self.path.display()
+            )
+        })
+    }
 
-        let old_decor = target.as_value().map(|v| v.decor().clone());
-        let mut new_value = TomlValue::from(new_version);
-        if let Some(decor) = old_decor {
-            *new_value.decor_mut() = decor;
+    fn find_json_value<'a>(&self, json: &'a mut JsonValue) -> Result<&'a mut JsonValue> {
+        let mut cur = json;
+        for field in &self.fields {
+            cur = cur.get_mut(field.as_str()).with_context(|| {
+                format!("field '{}' not found in {}", field, self.path.display())
+            })?;
         }
-        *target = toml_edit::Item::Value(new_value);
+        Ok(cur)
+    }
+
+    fn bump_toml(&self, content: &str, new_version: &str) -> Result<()> {
+        let mut doc: DocumentMut = content
+            .parse()
+            .with_context(|| format!("failed to parse TOML: {}", self.path.display()))?;
+
+        let value = self.find_toml_value(&mut doc)?;
+        let old_decor = value.decor().clone();
+        let mut new_value = TomlValue::from(new_version);
+        *new_value.decor_mut() = old_decor;
+        *value = new_value;
 
         std::fs::write(&self.path, doc.to_string())
             .with_context(|| format!("failed to write {}", self.path.display()))
@@ -99,13 +159,8 @@ impl VersionBumper {
         let mut json: JsonValue = serde_json::from_str(content)
             .with_context(|| format!("failed to parse JSON: {}", self.path.display()))?;
 
-        let mut cur = &mut json;
-        for field in &self.fields {
-            cur = cur.get_mut(field.as_str()).with_context(|| {
-                format!("field '{}' not found in {}", field, self.path.display())
-            })?;
-        }
-        *cur = JsonValue::String(new_version.to_string());
+        let value = self.find_json_value(&mut json)?;
+        *value = JsonValue::String(new_version.to_string());
 
         let updated = serde_json::to_string_pretty(&json)
             .with_context(|| format!("failed to serialize JSON: {}", self.path.display()))?;
@@ -210,6 +265,31 @@ mod tests {
     }
 
     #[test]
+    fn toml_preview_reports_old_value_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Cargo.toml");
+        let original = "# top comment\n[package]\nname = \"demo\" # trailing\nversion = \"0.1.0\"\n";
+        std::fs::write(&file, original).unwrap();
+
+        let bumper = toml_bumper(&file);
+        let preview = bumper.preview("0.2.0").unwrap();
+
+        assert_eq!(preview.old, "0.1.0");
+        assert_eq!(preview.new, "0.2.0");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+    }
+
+    #[test]
+    fn toml_preview_missing_field_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Cargo.toml");
+        std::fs::write(&file, "[package]\nname = \"demo\"\n").unwrap();
+
+        let bumper = toml_bumper(&file);
+        assert!(bumper.preview("0.2.0").is_err());
+    }
+
+    #[test]
     fn json_bump_sets_version_and_rolls_back() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("package.json");
@@ -235,6 +315,21 @@ mod tests {
 
         let mut bumper = VersionBumper::from_file(file, vec!["version".into()]).unwrap();
         assert!(bumper.execute("0.2.0").is_err());
+    }
+
+    #[test]
+    fn json_preview_reports_old_value_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("package.json");
+        let original = "{\n  \"name\": \"demo\",\n  \"version\": \"0.1.0\"\n}";
+        std::fs::write(&file, original).unwrap();
+
+        let bumper = VersionBumper::from_file(file.clone(), vec!["version".into()]).unwrap();
+        let preview = bumper.preview("0.2.0").unwrap();
+
+        assert_eq!(preview.old, "0.1.0");
+        assert_eq!(preview.new, "0.2.0");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
     }
 
     #[test]

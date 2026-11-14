@@ -3,9 +3,10 @@ use crate::pipeline::pipeline_steps::{
     parse_changelog_step, parse_config_step, versioning_step,
 };
 use crate::pipeline::release_context;
+use crate::pipeline::release_plan;
 use crate::pipeline::{AppContext, Pipeline};
 
-pub async fn run_pipeline() -> anyhow::Result<()> {
+pub async fn run_pipeline(dry_run: bool) -> anyhow::Result<()> {
     let mut pipeline = Pipeline::new();
 
     pipeline
@@ -15,6 +16,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
         .add(release_context::collect_step())
         .add(interactive_step::select_version_step())
         .add(git_step::check_branch_step())
+        .add(release_plan::step())
         .add(changelog_generation_step::step())
         .add(parse_changelog_step::step())
         .add(versioning_step::init_bumpers_step())
@@ -24,6 +26,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
         .add(github_step::release_step());
 
     let mut ctx = AppContext::new();
+    ctx.dry_run = dry_run;
     pipeline.run(&mut ctx).await?;
 
     Ok(())

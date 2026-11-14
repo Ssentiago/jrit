@@ -187,14 +187,21 @@ pub fn check_branch_step() -> PipelineStep {
         Box::pin(async move {
             let config = ctx.config.as_ref().context("config not loaded")?;
             let branch = GitOps::current_branch()?;
-            let branch = if !config.project.branches.contains(&branch) {
+            if !config.project.branches.contains(&branch) {
+                if ctx.dry_run {
+                    ctx.branch_warning = Some(format!(
+                        "branch {branch} is not allowed for releases, a real run would switch to one of: {}",
+                        config.project.branches.join(", ")
+                    ));
+                    ctx.branch = Some(branch);
+                    return Ok(Pipeline::no_rollback());
+                }
                 let selected = Interactive::select_branch(&config.project.branches)?;
                 GitOps::checkout(selected)?;
-                selected.to_string()
+                ctx.branch = Some(selected.to_string());
             } else {
-                branch
-            };
-            ctx.branch = Some(branch);
+                ctx.branch = Some(branch);
+            }
             Ok(Pipeline::no_rollback())
         })
     })

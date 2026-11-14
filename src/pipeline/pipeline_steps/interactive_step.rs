@@ -162,16 +162,14 @@ impl Interactive {
         Ok(version.trim().to_string())
     }
 
-    pub fn confirm_version(version: &str) -> Result<ConfirmAction> {
-        let options = vec!["Yes", "No", "Retry"];
-        let answer = Self::map_prompt(
-            Select::new(&format!("Selected version: {version}. Continue?"), options).prompt(),
-        )?;
+    pub fn confirm_plan() -> Result<PlanAction> {
+        let options = vec!["Apply", "Cancel"];
+        let answer =
+            Self::map_prompt(Select::new("Apply this release plan?", options).prompt())?;
 
         match answer {
-            "Yes" => Ok(ConfirmAction::Yes),
-            "No" => Ok(ConfirmAction::No),
-            "Retry" => Ok(ConfirmAction::Retry),
+            "Apply" => Ok(PlanAction::Apply),
+            "Cancel" => Ok(PlanAction::Cancel),
             _ => bail!("unexpected answer"),
         }
     }
@@ -185,10 +183,9 @@ impl Interactive {
     }
 }
 
-pub enum ConfirmAction {
-    Yes,
-    No,
-    Retry,
+pub enum PlanAction {
+    Apply,
+    Cancel,
 }
 
 fn print_context(analysis: &ReleaseAnalysis, current: &str) {
@@ -265,23 +262,13 @@ pub fn select_version_step() -> PipelineStep {
                 _ => None,
             };
 
-            let version = loop {
-                let v = match &current {
-                    Some(latest) => {
-                        Interactive::version_menu(&ctx.tags, latest, &analysis, draft.as_deref())?
-                    }
-                    None => {
-                        show_changes(&analysis, None);
-                        Interactive::input_version(&ctx.tags, "", true)?
-                    }
-                };
-                match Interactive::confirm_version(&v)? {
-                    ConfirmAction::Yes => break v,
-                    ConfirmAction::No => {
-                        ctx.aborted = true;
-                        return Ok(Pipeline::no_rollback());
-                    }
-                    ConfirmAction::Retry => {}
+            let version = match &current {
+                Some(latest) => {
+                    Interactive::version_menu(&ctx.tags, latest, &analysis, draft.as_deref())?
+                }
+                None => {
+                    show_changes(&analysis, None);
+                    Interactive::input_version(&ctx.tags, "", true)?
                 }
             };
             ctx.release_version = Some(version);

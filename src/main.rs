@@ -9,6 +9,9 @@ use owo_colors::OwoColorize;
 #[derive(Parser)]
 #[command(name = "jrit", about = "Automated release tool")]
 struct Cli {
+    /// Print the full release plan and exit without making any changes
+    #[arg(long)]
+    dry_run: bool,
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -32,7 +35,7 @@ async fn main() {
     let result = match cli.command {
         Some(Command::Init) => commands::init::run_init().await,
         Some(Command::Update) => commands::update::main().await,
-        None => run_pipeline().await,
+        None => run_pipeline(cli.dry_run).await,
     };
 
     if let Err(e) = result {

@@ -32,7 +32,21 @@ jrit will walk up the directory tree to find `jrit.toml` automatically.
 ```bash
 jrit init      # interactively create jrit.toml and optionally generate a CI workflow
 jrit update    # update jrit itself to the latest version
+jrit --dry-run # print the full release plan and exit without making any changes
 ```
+
+### Dry run
+
+`jrit --dry-run` runs the read-only part of the pipeline and prints the release plan: the version changes for every
+configured version file, the git commits that would be created, the tag, the changelog draft, the artifacts and the
+GitHub release title and body. Nothing is written, no git command runs, no editor opens, and the process exits with
+code 0.
+
+Version selection stays interactive so you can inspect the plan for any version you pick. If the current branch is not
+in the allowed list, the plan reports the mismatch instead of switching branches.
+
+In a normal run the same plan is printed as a confirmation screen after version selection. Choosing `Apply` continues
+the release, choosing `Cancel` stops jrit before it changes anything.
 
 ## Changelog
 

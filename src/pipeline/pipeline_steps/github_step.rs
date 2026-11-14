@@ -81,7 +81,7 @@ fn sha256_of(path: &Path) -> Result<String> {
     Ok(hex::encode(hash))
 }
 
-fn release_title(name: &str, tag: &str) -> String {
+pub fn release_title(name: &str, tag: &str) -> String {
     if name.is_empty() {
         format!("Release {tag}")
     } else {
