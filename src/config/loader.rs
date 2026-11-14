@@ -1,4 +1,4 @@
-use crate::config::models::Config;
+use crate::config::models::{ChangelogType, Config, ReleaseMode};
 use anyhow::Context;
 use anyhow::bail;
 use std::path::PathBuf;
@@ -31,20 +31,8 @@ fn validate_config(config: &Config) -> anyhow::Result<()> {
             p.repo
         ));
     }
-    if !matches!(
-        p.changelog_type.as_str(),
-        "conventional" | "raw" | "manual" | "none"
-    ) {
-        errors.push(format!(
-            "unknown changelog_type '{}', expected: conventional, manual, raw, none",
-            p.changelog_type
-        ));
-    }
-    if p.changelog_type != "none" && p.changelog.is_none() {
+    if p.changelog_type != ChangelogType::None && p.changelog.is_none() {
         errors.push("project.changelog is required when changelog_type is not 'none'".into());
-    }
-    if !matches!(p.release_mode.as_str(), "local" | "ci") {
-        errors.push("project.release_mode must be 'local' or 'ci'".into());
     }
     if p.branches.is_empty() {
         errors.push("project.branches is empty".into());
@@ -58,7 +46,7 @@ fn validate_config(config: &Config) -> anyhow::Result<()> {
         errors.push("no [[components]] defined".into());
     }
 
-    let is_ci_mode = p.release_mode.as_str() == "ci";
+    let is_ci_mode = p.release_mode == ReleaseMode::Ci;
 
     for (i, c) in config.components.iter().enumerate() {
         let label = format!("components[{i}]");

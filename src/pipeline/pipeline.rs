@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::pipeline::pipeline_steps::build_step::BuiltArtifact;
 use crate::pipeline::pipeline_steps::parse_changelog_step::Changelog;
-use crate::pipeline::pipeline_steps::versioning_step::VersionBumper;
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::collections::VecDeque;
@@ -28,6 +27,20 @@ pub struct PipelineStep {
     pub silent: bool,
 }
 
+impl PipelineStep {
+    pub fn new(
+        name: impl Into<String>,
+        silent: bool,
+        run: impl FnOnce(&mut AppContext) -> StepFuture + 'static,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            run: Box::new(run),
+            silent,
+        }
+    }
+}
+
 pub struct AppContext {
     pub root: Option<PathBuf>,
     pub config: Option<Config>,
@@ -35,7 +48,6 @@ pub struct AppContext {
     pub release_version: Option<String>,
     pub branch: Option<String>,
     pub changelog: Option<Changelog>,
-    pub bumpers: Vec<Box<dyn VersionBumper>>,
     pub artifacts: Vec<BuiltArtifact>,
     pub pending_steps: Vec<PipelineStep>,
     pub bumped_files: Vec<PathBuf>,
@@ -51,12 +63,17 @@ impl AppContext {
             release_version: None,
             branch: None,
             changelog: None,
-            bumpers: vec![],
             artifacts: vec![],
             pending_steps: vec![],
             bumped_files: vec![],
             aborted: false,
         }
+    }
+}
+
+impl Default for AppContext {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -77,20 +94,6 @@ impl Pipeline {
 
     pub fn add(&mut self, step: PipelineStep) -> &mut Self {
         self.steps.push_back(step);
-        self
-    }
-
-    pub fn step(
-        &mut self,
-        name: impl Into<String>,
-        run: impl FnOnce(&mut AppContext) -> StepFuture + 'static,
-        silent: bool,
-    ) -> &mut Self {
-        self.steps.push_back(PipelineStep {
-            name: name.into(),
-            run: Box::new(run),
-            silent,
-        });
         self
     }
 
@@ -145,5 +148,11 @@ impl Pipeline {
                 eprintln!("  {} rollback failed for '{name}': {e:#}", "!".red());
             }
         }
+    }
+}
+
+impl Default for Pipeline {
+    fn default() -> Self {
+        Self::new()
     }
 }

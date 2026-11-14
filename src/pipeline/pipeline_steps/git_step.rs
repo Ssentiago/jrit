@@ -1,3 +1,5 @@
+use super::interactive_step::Interactive;
+use crate::config::ChangelogType;
 use crate::pipeline::{Pipeline, PipelineStep, Rollback};
 use anyhow::{Context, Result};
 use std::path::PathBuf;
@@ -169,4 +171,89 @@ impl TagStep {
             silent: false,
         }
     }
+}
+
+pub fn retrieve_tags_step() -> PipelineStep {
+    PipelineStep::new("retrieve tags", true, |ctx| {
+        Box::pin(async move {
+            ctx.tags = GitOps::retrieve_current_tags()?;
+            Ok(Pipeline::no_rollback())
+        })
+    })
+}
+
+pub fn check_branch_step() -> PipelineStep {
+    PipelineStep::new("check branch", false, |ctx| {
+        Box::pin(async move {
+            let config = ctx.config.as_ref().context("config not loaded")?;
+            let branch = GitOps::current_branch()?;
+            let branch = if !config.project.branches.contains(&branch) {
+                let selected = Interactive::select_branch(&config.project.branches)?;
+                GitOps::checkout(selected)?;
+                selected.to_string()
+            } else {
+                branch
+            };
+            ctx.branch = Some(branch);
+            Ok(Pipeline::no_rollback())
+        })
+    })
+}
+
+pub fn commit_push_step() -> PipelineStep {
+    PipelineStep::new("commit and push", false, |ctx| {
+        Box::pin(async move {
+            let version = ctx
+                .release_version
+                .as_ref()
+                .context("release version not selected")?
+                .clone();
+            let branch = ctx.branch.as_ref().context("branch not resolved")?.clone();
+            let root = ctx.root.clone().context("project root not determined")?;
+
+            let mut pending: Vec<PipelineStep> = Vec::new();
+            if let Some(config) = ctx.config.as_ref()
+                && config.project.changelog_type != ChangelogType::None
+                && let Some(changelog) = config.project.changelog.as_ref()
+            {
+                pending.push(
+                    CommitStep::new(CommitParams {
+                        files: vec![root.join(changelog)],
+                        message: "chore: update changelog".to_string(),
+                        branch: branch.clone(),
+                    })
+                    .build_step(),
+                );
+            }
+
+            pending.push(
+                CommitStep::new(CommitParams {
+                    files: ctx.bumped_files.clone(),
+                    message: format!("chore: update app version to {version}"),
+                    branch,
+                })
+                .build_step(),
+            );
+
+            for step in pending {
+                ctx.pending_steps.push(step);
+            }
+            Ok(Pipeline::no_rollback())
+        })
+    })
+}
+
+pub fn tag_push_step() -> PipelineStep {
+    PipelineStep::new("create tag", false, |ctx| {
+        Box::pin(async move {
+            let version = ctx
+                .release_version
+                .as_ref()
+                .context("release version not selected")?
+                .clone();
+            let step = TagStep::new(TagParams { tag: version }).build_step();
+            ctx.pending_steps.push(step);
+            Ok(Pipeline::no_rollback())
+        })
+    })
 }

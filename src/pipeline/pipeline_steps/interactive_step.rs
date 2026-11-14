@@ -1,4 +1,4 @@
-use crate::pipeline::UserInterrupt;
+use crate::pipeline::{Pipeline, PipelineStep, UserInterrupt};
 use anyhow::{Result, bail};
 use inquire::{InquireError, Select, Text};
 use semver::Version;
@@ -75,10 +75,10 @@ impl Interactive {
             } else {
                 println!("Previous versions:\n  {}", tags.join("\n  "));
             }
-            if let Err(e) = Text::new("Press Enter to continue...").prompt() {
-                if matches!(e, InquireError::OperationInterrupted) {
-                    return Err(UserInterrupt.into());
-                }
+            if let Err(e) = Text::new("Press Enter to continue...").prompt()
+                && matches!(e, InquireError::OperationInterrupted)
+            {
+                return Err(UserInterrupt.into());
             }
         }
     }
@@ -112,12 +112,12 @@ impl Interactive {
                             "Version already exists.".into(),
                         ));
                     }
-                    if let Some(ref cur) = current_parsed {
-                        if &parsed <= cur {
-                            return Ok(inquire::validator::Validation::Invalid(
-                                format!("Must be greater than current version {cur}").into(),
-                            ));
-                        }
+                    if let Some(ref cur) = current_parsed
+                        && &parsed <= cur
+                    {
+                        return Ok(inquire::validator::Validation::Invalid(
+                            format!("Must be greater than current version {cur}").into(),
+                        ));
                     }
                     Ok(inquire::validator::Validation::Valid)
                 })
@@ -157,4 +157,64 @@ pub enum ConfirmAction {
     Yes,
     No,
     Retry,
+}
+
+pub fn select_version_step() -> PipelineStep {
+    PipelineStep::new("select version", false, |ctx| {
+        Box::pin(async move {
+            let version = loop {
+                let current = ctx
+                    .tags
+                    .iter()
+                    .find(|t| Interactive::parse_version_tag(t).is_some());
+                let v = if let Some(latest) = current {
+                    Interactive::version_menu(&ctx.tags, latest)
+                } else {
+                    Interactive::input_version(&ctx.tags, "", true)
+                }?;
+                match Interactive::confirm_version(&v)? {
+                    ConfirmAction::Yes => break v,
+                    ConfirmAction::No => {
+                        ctx.aborted = true;
+                        return Ok(Pipeline::no_rollback());
+                    }
+                    ConfirmAction::Retry => {}
+                }
+            };
+            ctx.release_version = Some(version);
+            Ok(Pipeline::no_rollback())
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_version_tag_accepts_prefixes_and_plain() {
+        assert_eq!(
+            Interactive::parse_version_tag("v1.2.3").unwrap().to_string(),
+            "1.2.3"
+        );
+        assert_eq!(
+            Interactive::parse_version_tag("V2.0.0").unwrap().to_string(),
+            "2.0.0"
+        );
+        assert_eq!(
+            Interactive::parse_version_tag("0.1.0").unwrap().to_string(),
+            "0.1.0"
+        );
+        assert_eq!(
+            Interactive::parse_version_tag(" 1.0.0 ").unwrap().to_string(),
+            "1.0.0"
+        );
+    }
+
+    #[test]
+    fn parse_version_tag_rejects_invalid() {
+        assert!(Interactive::parse_version_tag("not-a-version").is_none());
+        assert!(Interactive::parse_version_tag("1.2").is_none());
+        assert!(Interactive::parse_version_tag("").is_none());
+    }
 }

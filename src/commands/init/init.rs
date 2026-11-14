@@ -1,5 +1,5 @@
 use crate::commands::init::ci_gen::{self, CiGenParams, SetupStep, available_targets};
-use crate::config::{Component, Config, Project, VersionFile};
+use crate::config::{ChangelogType, Component, Config, Project, ReleaseMode, VersionFile};
 use inquire::MultiSelect;
 use inquire::validator::Validation;
 use inquire::{Confirm, Select, Text};
@@ -25,13 +25,14 @@ pub async fn run_init() -> anyhow::Result<()> {
         .filter(|s| !s.is_empty())
         .collect();
 
-    let changelog_type = Select::new(
+    let changelog_type: ChangelogType = Select::new(
         "Changelog type:",
         vec!["none", "conventional", "raw", "manual"],
     )
-    .prompt()?;
+    .prompt()?
+    .parse()?;
 
-    let changelog = if changelog_type != "none" {
+    let changelog = if changelog_type != ChangelogType::None {
         Some(
             Text::new("Changelog path:")
                 .with_default("CHANGELOG.md")
@@ -41,10 +42,12 @@ pub async fn run_init() -> anyhow::Result<()> {
         None
     };
 
-    let release_mode = Select::new("Release mode:", vec!["local", "ci"]).prompt()?;
+    let release_mode: ReleaseMode = Select::new("Release mode:", vec!["local", "ci"])
+        .prompt()?
+        .parse()?;
     let mut components: Vec<Component> = vec![];
 
-    let is_local_mode = release_mode == "local";
+    let is_local_mode = release_mode == ReleaseMode::Local;
 
     loop {
         println!("Add a component ({} so far)", components.len());
@@ -131,8 +134,8 @@ pub async fn run_init() -> anyhow::Result<()> {
             name,
             repo,
             branches,
-            changelog_type: changelog_type.to_string(),
-            release_mode: release_mode.to_string(),
+            changelog_type,
+            release_mode,
             changelog,
         },
         components,
@@ -142,7 +145,7 @@ pub async fn run_init() -> anyhow::Result<()> {
 
     println!("{} jrit.toml created", "✓".green());
 
-    if release_mode == "ci" {
+    if release_mode == ReleaseMode::Ci {
         let generate_ci = Confirm::new("Generate GitHub Actions workflow?")
             .with_default(true)
             .prompt()?;

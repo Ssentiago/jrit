@@ -1,4 +1,5 @@
-use crate::pipeline::{PipelineStep, Rollback};
+use crate::config::ChangelogType;
+use crate::pipeline::{Pipeline, PipelineStep, Rollback};
 use super::interactive_step::Interactive;
 use anyhow::{Context, Result, bail};
 use git_cliff_core::{
@@ -16,7 +17,7 @@ pub struct ChangelogGen {
     repo_path: String,
     version: String,
     changelog_path: PathBuf,
-    changelog_type: String,
+    changelog_type: ChangelogType,
     original_content: Option<String>,
 }
 
@@ -26,7 +27,7 @@ impl ChangelogGen {
         repo_path: String,
         version: String,
         changelog_path: PathBuf,
-        changelog_type: String,
+        changelog_type: ChangelogType,
     ) -> Self {
         Self {
             root,
@@ -45,10 +46,12 @@ impl ChangelogGen {
             None
         };
 
-        let draft = match self.changelog_type.as_str() {
-            "conventional" => generate_conventional(&self.root, &self.version, &self.repo_path)?,
-            "raw" => generate_raw(&self.root, &self.version)?,
-            t => bail!("unknown changelog_type: {t}"),
+        let draft = match self.changelog_type {
+            ChangelogType::Conventional => {
+                generate_conventional(&self.root, &self.version, &self.repo_path)?
+            }
+            ChangelogType::Raw => generate_raw(&self.root, &self.version)?,
+            other => bail!("changelog_type {other:?} does not generate a changelog"),
         };
 
         let edited = open_in_editor(&draft)?;
@@ -90,6 +93,46 @@ impl ChangelogGen {
             silent: false,
         }
     }
+}
+
+pub fn step() -> PipelineStep {
+    PipelineStep::new("generate changelog", false, |ctx| {
+        Box::pin(async move {
+            let config = ctx.config.as_ref().context("config not loaded")?;
+            if !config.project.changelog_type.is_generated() {
+                return Ok(Pipeline::no_rollback());
+            }
+
+            let root = ctx
+                .root
+                .as_ref()
+                .context("project root not determined")?
+                .clone();
+            let version = ctx
+                .release_version
+                .as_ref()
+                .context("release version not selected")?
+                .clone();
+            let changelog_path = match &config.project.changelog {
+                Some(p) => root.join(p),
+                None => bail!("changelog path is required when changelog_type is not 'none'"),
+            };
+            if config.project.repo.is_empty() {
+                bail!("project.repo is required for changelog generation");
+            }
+
+            let gen_step = ChangelogGen::new(
+                root,
+                config.project.repo.clone(),
+                version,
+                changelog_path,
+                config.project.changelog_type,
+            )
+            .build_step();
+            ctx.pending_steps.push(gen_step);
+            Ok(Pipeline::no_rollback())
+        })
+    })
 }
 
 fn previous_release_tag(root: &Path) -> Result<Option<String>> {

@@ -1,4 +1,4 @@
-use crate::config::{Component, Config};
+use crate::config::{Component, Config, ReleaseMode};
 use crate::pipeline::{Pipeline, PipelineStep};
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -142,20 +142,25 @@ impl Builder {
         zip.finish()?;
         Ok(())
     }
+}
 
-    pub fn build_step(self) -> PipelineStep {
-        PipelineStep {
-            name: "build all components".into(),
-            run: Box::new(move |ctx| {
-                Box::pin(async move {
-                    let artifacts = self.build_all()?;
-                    ctx.artifacts = artifacts;
-                    Ok(Pipeline::no_rollback())
-                })
-            }),
-            silent: false,
-        }
-    }
+pub fn step() -> PipelineStep {
+    PipelineStep::new("build", false, |ctx| {
+        Box::pin(async move {
+            let config = ctx.config.as_ref().context("config not loaded")?.clone();
+            if config.project.release_mode == ReleaseMode::Ci {
+                return Ok(Pipeline::no_rollback());
+            }
+            let root = ctx
+                .root
+                .as_ref()
+                .context("project root not determined")?
+                .clone();
+            let builder = Builder::new(config, root);
+            ctx.artifacts = builder.build_all()?;
+            Ok(Pipeline::no_rollback())
+        })
+    })
 }
 
 pub struct BuiltArtifact {

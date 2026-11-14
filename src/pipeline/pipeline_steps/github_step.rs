@@ -1,3 +1,5 @@
+use crate::config::ReleaseMode;
+use crate::pipeline::{Pipeline, PipelineStep};
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use octocrab::Octocrab;
@@ -25,20 +27,20 @@ pub async fn get_token() -> Result<String> {
         .args(["auth", "token"])
         .output();
 
-    if let Ok(out) = gh {
-        if out.status.success() {
-            let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
-            if !token.is_empty() {
-                return Ok(token);
-            }
+    if let Ok(out) = gh
+        && out.status.success()
+    {
+        let token = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !token.is_empty() {
+            return Ok(token);
         }
     }
 
     for var in ["GITHUB_TOKEN", "GH_TOKEN"] {
-        if let Ok(token) = std::env::var(var) {
-            if !token.is_empty() {
-                return Ok(token);
-            }
+        if let Ok(token) = std::env::var(var)
+            && !token.is_empty()
+        {
+            return Ok(token);
         }
     }
 
@@ -171,4 +173,62 @@ pub async fn create_release(params: ReleaseParams) -> Result<ReleaseResult> {
         url: release.html_url.to_string(),
         id: release.id.0,
     })
+}
+
+pub fn release_step() -> PipelineStep {
+    PipelineStep::new("github release", false, |ctx| {
+        Box::pin(async move {
+            let config = ctx.config.as_ref().context("config not loaded")?.clone();
+            if config.project.release_mode == ReleaseMode::Ci {
+                return Ok(Pipeline::no_rollback());
+            }
+
+            let version = ctx
+                .release_version
+                .as_ref()
+                .context("release version not selected")?
+                .clone();
+
+            let artifacts = std::mem::take(&mut ctx.artifacts);
+            let paths: Vec<PathBuf> = artifacts.into_iter().flat_map(|a| a.paths).collect();
+
+            let prev_tag = ctx.tags.first().map(|s| s.as_str());
+            let body = match ctx.changelog.as_ref() {
+                Some(cl) => build_release_body(&cl.body, prev_tag, &version, &config.project.repo),
+                None => String::new(),
+            };
+
+            let params = ReleaseParams {
+                name: config.project.name.clone(),
+                repo_name: config.project.repo_name(),
+                repo_owner: config.project.owner(),
+                tag: version,
+                draft: false,
+                prerelease: false,
+                artifacts: paths,
+                body,
+            };
+
+            create_release(params).await?;
+            Ok(Pipeline::no_rollback())
+        })
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn release_body_appends_compare_link_when_prev_tag() {
+        let body = build_release_body("changes", Some("1.0.0"), "1.1.0", "owner/repo");
+        assert!(body.starts_with("changes"));
+        assert!(body.contains("https://github.com/owner/repo/compare/1.0.0...1.1.0"));
+    }
+
+    #[test]
+    fn release_body_is_changelog_when_no_prev_tag() {
+        let body = build_release_body("changes", None, "1.0.0", "owner/repo");
+        assert_eq!(body, "changes");
+    }
 }
