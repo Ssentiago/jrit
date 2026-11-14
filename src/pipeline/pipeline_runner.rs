@@ -2,6 +2,7 @@ use crate::pipeline::pipeline_steps::{
     build_step, changelog_generation_step, get_root_step, git_step, github_step, interactive_step,
     parse_changelog_step, parse_config_step, versioning_step,
 };
+use crate::pipeline::release_context;
 use crate::pipeline::{AppContext, Pipeline};
 
 pub async fn run_pipeline() -> anyhow::Result<()> {
@@ -11,6 +12,7 @@ pub async fn run_pipeline() -> anyhow::Result<()> {
         .add(get_root_step::step())
         .add(parse_config_step::step())
         .add(git_step::retrieve_tags_step())
+        .add(release_context::collect_step())
         .add(interactive_step::select_version_step())
         .add(git_step::check_branch_step())
         .add(changelog_generation_step::step())

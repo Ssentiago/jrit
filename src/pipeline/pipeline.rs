@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::pipeline::pipeline_steps::build_step::BuiltArtifact;
 use crate::pipeline::pipeline_steps::parse_changelog_step::Changelog;
+use crate::pipeline::release_context::ReleaseAnalysis;
 use anyhow::Result;
 use owo_colors::OwoColorize;
 use std::collections::VecDeque;
@@ -46,6 +47,7 @@ pub struct AppContext {
     pub config: Option<Config>,
     pub tags: Vec<String>,
     pub release_version: Option<String>,
+    pub release_analysis: Option<ReleaseAnalysis>,
     pub branch: Option<String>,
     pub changelog: Option<Changelog>,
     pub artifacts: Vec<BuiltArtifact>,
@@ -61,6 +63,7 @@ impl AppContext {
             config: None,
             tags: vec![],
             release_version: None,
+            release_analysis: None,
             branch: None,
             changelog: None,
             artifacts: vec![],
