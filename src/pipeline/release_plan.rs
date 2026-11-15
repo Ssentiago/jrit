@@ -36,7 +36,6 @@ pub struct ReleasePlan {
     pub tag: String,
     pub prev_tag: Option<String>,
     pub branch: String,
-    pub branch_warning: Option<String>,
     pub changelog_body: Option<String>,
     pub changelog_note: Option<String>,
     pub version_files: Vec<VersionFileChange>,
@@ -147,7 +146,6 @@ impl ReleasePlan {
             tag,
             prev_tag,
             branch,
-            branch_warning: ctx.branch_warning.clone(),
             changelog_body,
             changelog_note,
             version_files,
@@ -188,9 +186,6 @@ pub fn render(plan: &ReleasePlan) -> String {
         plan.prev_tag.as_deref().unwrap_or("none")
     ));
     out.push_str(&format!("  branch: {}\n", plan.branch));
-    if let Some(warning) = &plan.branch_warning {
-        out.push_str(&format!("  warning: {warning}\n"));
-    }
 
     out.push_str("\nVersion files:\n");
     if plan.version_files.is_empty() {
@@ -369,7 +364,6 @@ mod tests {
         assert_eq!(plan.tag, "1.1.0");
         assert_eq!(plan.prev_tag.as_deref(), Some("v1.0.0"));
         assert_eq!(plan.branch, "main");
-        assert!(plan.branch_warning.is_none());
 
         assert_eq!(plan.version_files.len(), 1);
         let change = &plan.version_files[0];

@@ -1,5 +1,6 @@
 pub mod build_step;
 pub mod changelog_generation_step;
+pub mod doctor_step;
 pub mod get_root_step;
 pub mod git_step;
 pub mod github_step;

@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod config;
+pub mod doctor;
 pub mod pipeline;
 
 use crate::pipeline::pipeline_runner::run_pipeline;
@@ -22,6 +23,8 @@ enum Command {
     Init,
     /// Updates self
     Update,
+    /// Run preflight checks and exit
+    Doctor,
 }
 
 #[tokio::main]
@@ -35,6 +38,7 @@ async fn main() {
     let result = match cli.command {
         Some(Command::Init) => commands::init::run_init().await,
         Some(Command::Update) => commands::update::main().await,
+        Some(Command::Doctor) => commands::doctor::run_doctor().await,
         None => run_pipeline(cli.dry_run).await,
     };
 

@@ -174,13 +174,6 @@ impl Interactive {
         }
     }
 
-    pub fn select_branch(allowed: &[String]) -> Result<&str> {
-        let opts: Vec<&str> = allowed.iter().map(|s| s.as_str()).collect();
-        let answer = Self::map_prompt(
-            Select::new("Current branch is not allowed. Select target branch:", opts).prompt(),
-        )?;
-        Ok(answer)
-    }
 }
 
 pub enum PlanAction {

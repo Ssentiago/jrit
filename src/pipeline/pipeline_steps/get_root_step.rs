@@ -2,7 +2,7 @@ use crate::pipeline::{Pipeline, PipelineStep};
 use anyhow::{Context, anyhow};
 use std::path::PathBuf;
 
-fn find_root() -> anyhow::Result<PathBuf> {
+pub fn find_root() -> anyhow::Result<PathBuf> {
     let mut current = std::env::current_dir().context("cannot determine current directory")?;
     loop {
         if current.join("jrit.toml").exists() {

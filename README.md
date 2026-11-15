@@ -31,6 +31,7 @@ jrit will walk up the directory tree to find `jrit.toml` automatically.
 
 ```bash
 jrit init      # interactively create jrit.toml and optionally generate a CI workflow
+jrit doctor    # run preflight checks and exit with the result
 jrit update    # update jrit itself to the latest version
 jrit --dry-run # print the full release plan and exit without making any changes
 ```
@@ -39,14 +40,38 @@ jrit --dry-run # print the full release plan and exit without making any changes
 
 `jrit --dry-run` runs the read-only part of the pipeline and prints the release plan: the version changes for every
 configured version file, the git commits that would be created, the tag, the changelog draft, the artifacts and the
-GitHub release title and body. Nothing is written, no git command runs, no editor opens, and the process exits with
-code 0.
+GitHub release title and body. Nothing is written, no git state is changed, no editor opens, and the process exits
+with code 0.
 
-Version selection stays interactive so you can inspect the plan for any version you pick. If the current branch is not
-in the allowed list, the plan reports the mismatch instead of switching branches.
+Version selection stays interactive so you can inspect the plan for any version you pick. Preflight checks run first
+and their problems are reported without stopping the plan.
 
-In a normal run the same plan is printed as a confirmation screen after version selection. Choosing `Apply` continues
-the release, choosing `Cancel` stops jrit before it changes anything.
+In a normal run the preflight checks must all pass before anything else happens, and the same plan is printed as a
+confirmation screen after version selection. Choosing `Apply` continues the release, choosing `Cancel` stops jrit
+before it changes anything.
+
+## Preflight checks
+
+`jrit doctor` verifies that the project is ready for a release and prints a report with one line per check. The same
+checks run automatically after `jrit.toml` is parsed and before the release changes anything: if any of them fails, jrit
+prints the whole report and stops. Warnings are informational and never stop the run. With `--dry-run` the report is
+printed but the problems do not stop the plan.
+
+The checks cover the release prerequisites:
+
+- `jrit.toml` is found, parses and validates, every configured version file exists and its version field reads, and the
+  changelog file exists when changelog handling is enabled
+- the project is inside a git repository, `origin` is configured, and the current branch is in the allowed list and is
+  not detached; uncommitted changes, tracked and untracked alike, are only a warning and never block the release
+- the local branch is not behind `origin`, and local tags match `origin`; `jrit doctor` fetches tags first, a dry run
+  only compares them and writes nothing
+- GitHub credentials are available (`gh` CLI, `GITHUB_TOKEN`, `GH_TOKEN` or the jrit config) and can access the
+  configured repository; this check is skipped in `ci` release mode
+
+The git and GitHub checks talk to `origin` and the GitHub API, so they need network access.
+
+After you pick the release version, jrit also verifies that the chosen tag does not already exist locally or on `origin`
+and stops before changing anything if it does.
 
 ## Changelog
 
@@ -86,7 +111,7 @@ jrit is configured via a `jrit.toml` file in the project root.
 [project]
 name = "my-app"
 repo = "owner/repo"               # GitHub repo in owner/repo format
-branches = ["main", "master"]     # allowed release branches; if you're on a different branch, jrit will ask
+branches = ["main", "master"]     # allowed release branches; releasing from any other branch is blocked
 
 changelog_type = "conventional"   # optional: "conventional" | "raw" | "manual" | "none" (default: "none")
 changelog = "CHANGELOG.md"        # required if changelog_type is not "none"

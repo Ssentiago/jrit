@@ -1,6 +1,6 @@
 use crate::pipeline::pipeline_steps::{
-    build_step, changelog_generation_step, get_root_step, git_step, github_step, interactive_step,
-    parse_changelog_step, parse_config_step, versioning_step,
+    build_step, changelog_generation_step, doctor_step, get_root_step, git_step, github_step,
+    interactive_step, parse_changelog_step, parse_config_step, versioning_step,
 };
 use crate::pipeline::release_context;
 use crate::pipeline::release_plan;
@@ -12,10 +12,12 @@ pub async fn run_pipeline(dry_run: bool) -> anyhow::Result<()> {
     pipeline
         .add(get_root_step::step())
         .add(parse_config_step::step())
+        .add(doctor_step::preflight_step())
+        .add(git_step::resolve_branch_step())
         .add(git_step::retrieve_tags_step())
         .add(release_context::collect_step())
         .add(interactive_step::select_version_step())
-        .add(git_step::check_branch_step())
+        .add(doctor_step::verify_tag_step())
         .add(release_plan::step())
         .add(changelog_generation_step::step())
         .add(parse_changelog_step::step())

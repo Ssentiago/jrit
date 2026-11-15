@@ -66,36 +66,40 @@ impl VersionBumper {
 
     /// Computes the version change for the file without writing anything.
     pub fn preview(&self, new_version: &str) -> Result<VersionPreview> {
+        Ok(VersionPreview {
+            old: self.current_version()?,
+            new: new_version.to_string(),
+        })
+    }
+
+    /// Reads the current version from the file without writing anything.
+    pub fn current_version(&self) -> Result<String> {
         let content = self.read_content()?;
-        let old = match self.format {
+        match self.format {
             VersionFormat::Toml => {
                 let mut doc: DocumentMut = content
                     .parse()
                     .with_context(|| format!("failed to parse TOML: {}", self.path.display()))?;
                 let value = self.find_toml_value(&mut doc)?;
-                value
+                Ok(value
                     .as_str()
                     .map(|s| s.to_string())
-                    .unwrap_or_else(|| value.to_string().trim().to_string())
+                    .unwrap_or_else(|| value.to_string().trim().to_string()))
             }
             VersionFormat::Json => {
                 let mut json: JsonValue = serde_json::from_str(&content)
                     .with_context(|| format!("failed to parse JSON: {}", self.path.display()))?;
                 let value = self.find_json_value(&mut json)?;
-                value
+                Ok(value
                     .as_str()
                     .map(|s| s.to_string())
-                    .unwrap_or_else(|| value.to_string())
+                    .unwrap_or_else(|| value.to_string()))
             }
-        };
-        Ok(VersionPreview {
-            old,
-            new: new_version.to_string(),
-        })
+        }
     }
 
-    /// Navigates to the configured version value, shared by preview and write
-    /// so the two can never look at different fields.
+    /// Navigates to the configured version value, shared by preview,
+    /// current_version and write so they can never look at different fields.
     fn find_toml_value<'a>(&self, doc: &'a mut DocumentMut) -> Result<&'a mut TomlValue> {
         let (last_field, parents) = self.fields.split_last().with_context(|| {
             format!(
@@ -276,6 +280,18 @@ mod tests {
 
         assert_eq!(preview.old, "0.1.0");
         assert_eq!(preview.new, "0.2.0");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
+    }
+
+    #[test]
+    fn current_version_reads_field_without_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("Cargo.toml");
+        let original = "[package]\nname = \"demo\"\nversion = \"0.1.0\"\n";
+        std::fs::write(&file, original).unwrap();
+
+        let bumper = toml_bumper(&file);
+        assert_eq!(bumper.current_version().unwrap(), "0.1.0");
         assert_eq!(std::fs::read_to_string(&file).unwrap(), original);
     }
 

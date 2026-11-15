@@ -1,4 +1,3 @@
-use super::interactive_step::Interactive;
 use crate::config::ChangelogType;
 use crate::pipeline::{Pipeline, PipelineStep, Rollback};
 use anyhow::{Context, Result};
@@ -61,10 +60,6 @@ impl GitOps {
             Some(1) => Ok(true),
             _ => anyhow::bail!("git {:?} failed with {}", args, status),
         }
-    }
-
-    pub fn checkout(branch: &str) -> Result<()> {
-        Self::run(&["checkout", branch])
     }
 
     pub fn retrieve_current_tags() -> Result<Vec<String>> {
@@ -182,26 +177,10 @@ pub fn retrieve_tags_step() -> PipelineStep {
     })
 }
 
-pub fn check_branch_step() -> PipelineStep {
-    PipelineStep::new("check branch", false, |ctx| {
+pub fn resolve_branch_step() -> PipelineStep {
+    PipelineStep::new("resolve branch", true, |ctx| {
         Box::pin(async move {
-            let config = ctx.config.as_ref().context("config not loaded")?;
-            let branch = GitOps::current_branch()?;
-            if !config.project.branches.contains(&branch) {
-                if ctx.dry_run {
-                    ctx.branch_warning = Some(format!(
-                        "branch {branch} is not allowed for releases, a real run would switch to one of: {}",
-                        config.project.branches.join(", ")
-                    ));
-                    ctx.branch = Some(branch);
-                    return Ok(Pipeline::no_rollback());
-                }
-                let selected = Interactive::select_branch(&config.project.branches)?;
-                GitOps::checkout(selected)?;
-                ctx.branch = Some(selected.to_string());
-            } else {
-                ctx.branch = Some(branch);
-            }
+            ctx.branch = Some(GitOps::current_branch()?);
             Ok(Pipeline::no_rollback())
         })
     })
