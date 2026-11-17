@@ -137,6 +137,7 @@ pub async fn run_init() -> anyhow::Result<()> {
             changelog_type,
             release_mode,
             changelog,
+            sha256sums: false,
         },
         components,
     };

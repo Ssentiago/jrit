@@ -42,6 +42,7 @@ pub struct ReleasePlan {
     pub commits: Vec<PlanCommit>,
     pub artifacts: Vec<PlanArtifact>,
     pub release_mode: ReleaseMode,
+    pub sha256sums: bool,
     pub release_title: String,
     pub release_body: String,
     pub repo: String,
@@ -152,6 +153,7 @@ impl ReleasePlan {
             commits,
             artifacts,
             release_mode: config.project.release_mode,
+            sha256sums: config.project.sha256sums,
             release_title,
             release_body,
             repo: config.project.repo.clone(),
@@ -226,7 +228,7 @@ pub fn render(plan: &ReleasePlan) -> String {
             out.push_str("  release_mode is ci: build and GitHub release are handled by CI after the tag is pushed\n");
         }
         ReleaseMode::Local => {
-            out.push_str("  names and checksums appear only after the build runs\n");
+            out.push_str("  names appear only after the build runs\n");
             for artifact in &plan.artifacts {
                 out.push_str(&format!("  component {}:\n", artifact.component));
                 out.push_str(&format!(
@@ -253,6 +255,14 @@ pub fn render(plan: &ReleasePlan) -> String {
         ReleaseMode::Local => {
             out.push_str(&format!("  repo: {}\n", plan.repo));
             out.push_str(&format!("  title: {}\n", plan.release_title));
+            out.push_str(&format!(
+                "  checksum file: {}\n",
+                if plan.sha256sums {
+                    "sha256sums.txt"
+                } else {
+                    "disabled"
+                }
+            ));
             out.push_str("  body:\n");
             if plan.release_body.is_empty() {
                 out.push_str("    (empty)\n");
@@ -319,6 +329,7 @@ mod tests {
                 changelog_type: ChangelogType::Conventional,
                 changelog: Some("CHANGELOG.md".into()),
                 release_mode: ReleaseMode::Local,
+                sha256sums: true,
             },
             components: vec![Component {
                 name: "demo".into(),
@@ -420,6 +431,7 @@ mod tests {
         assert!(out.contains("chore: update app version to 1.1.0"));
         assert!(out.contains("component demo:"));
         assert!(out.contains("build: cargo build --release"));
+        assert!(out.contains("checksum file: sha256sums.txt"));
         assert!(out.contains("title: demo 1.1.0"));
     }
 

@@ -14,6 +14,7 @@ pub struct ReleaseParams {
     pub artifacts: Vec<PathBuf>,
     pub draft: bool,
     pub prerelease: bool,
+    pub sha256sums: bool,
 }
 
 pub struct ReleaseResult {
@@ -126,14 +127,16 @@ async fn upload_assets(
             .with_context(|| format!("Failed to upload {file_name}"))?;
     }
 
-    let checksums = build_checksum_file(&params.artifacts)?;
-    octocrab
-        .repos(&params.repo_owner, &params.repo_name)
-        .releases()
-        .upload_asset(release_id, "sha256sums.txt", Bytes::from(checksums))
-        .send()
-        .await
-        .context("Failed to upload sha256sums.txt")?;
+    if params.sha256sums {
+        let checksums = build_checksum_file(&params.artifacts)?;
+        octocrab
+            .repos(&params.repo_owner, &params.repo_name)
+            .releases()
+            .upload_asset(release_id, "sha256sums.txt", Bytes::from(checksums))
+            .send()
+            .await
+            .context("Failed to upload sha256sums.txt")?;
+    }
 
     Ok(())
 }
@@ -207,6 +210,7 @@ pub fn release_step() -> PipelineStep {
                 prerelease: false,
                 artifacts: paths,
                 body,
+                sha256sums: config.project.sha256sums,
             };
 
             create_release(params).await?;
@@ -230,5 +234,20 @@ mod tests {
     fn release_body_is_changelog_when_no_prev_tag() {
         let body = build_release_body("changes", None, "1.0.0", "owner/repo");
         assert_eq!(body, "changes");
+    }
+
+    #[test]
+    fn checksum_file_lists_sha256_per_artifact() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join("artifact.bin");
+        std::fs::write(&file, b"hello").unwrap();
+
+        let out = build_checksum_file(&[file]).unwrap();
+
+        // sha256 of "hello"
+        assert_eq!(
+            out,
+            "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824  artifact.bin\n"
+        );
     }
 }

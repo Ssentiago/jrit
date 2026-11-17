@@ -118,6 +118,8 @@ changelog = "CHANGELOG.md"        # required if changelog_type is not "none"
 
 release_mode = "local"            # optional: "local" | "ci" (default: "local")
 
+sha256sums = true                 # optional: attach sha256sums.txt to the release (default: false)
+
 [[components]]
 name = "main"
 path = "."                            # directory of the component, relative to jrit.toml
@@ -165,6 +167,13 @@ The `zip` flag controls how artifacts are uploaded to the GitHub release:
   directories.
 - `zip = false` — artifact is uploaded as-is. If `artifact` points to a directory, each file inside is uploaded
   individually. Nested subdirectories are packed into separate zips automatically.
+
+### `sha256sums`
+
+Disabled by default and must be turned on explicitly with `sha256sums = true` in `[project]`. When enabled (local
+release mode only), jrit generates a `sha256sums.txt` file with a SHA-256 checksum for every uploaded artifact and
+attaches it to the GitHub release. When the file is not attached, `jrit update` skips checksum verification and prints a
+warning.
 
 ### `path` in `version_files`
 

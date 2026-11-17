@@ -52,6 +52,7 @@ pub(super) fn make_config(branches: Vec<&str>, components: Vec<Component>) -> Co
             changelog_type: ChangelogType::None,
             changelog: None,
             release_mode: ReleaseMode::Local,
+            sha256sums: false,
         },
         components,
     }

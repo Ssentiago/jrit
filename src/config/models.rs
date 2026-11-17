@@ -65,6 +65,8 @@ pub struct Project {
     pub changelog: Option<String>,
     #[serde(default)]
     pub release_mode: ReleaseMode,
+    #[serde(default)]
+    pub sha256sums: bool,
 }
 
 impl Project {
@@ -206,5 +208,17 @@ mod tests {
             path: None,
         };
         assert!(unknown.resolved_path().is_err());
+    }
+
+    #[test]
+    fn sha256sums_is_opt_in() {
+        let head = "[project]\nname = \"demo\"\nrepo = \"owner/demo\"\nbranches = [\"main\"]\n";
+        let tail = "[[components]]\nname = \"main\"\npath = \".\"\nbuild = \"cargo build\"\nartifact = \"./a\"\nversion_files = [{ file = \"Cargo.toml\" }]\n";
+
+        let off: Config = toml::from_str(&format!("{head}{tail}")).unwrap();
+        assert!(!off.project.sha256sums);
+
+        let on: Config = toml::from_str(&format!("{head}sha256sums = true\n{tail}")).unwrap();
+        assert!(on.project.sha256sums);
     }
 }
