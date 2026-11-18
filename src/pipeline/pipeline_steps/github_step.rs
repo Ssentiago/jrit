@@ -1,4 +1,4 @@
-use crate::config::ReleaseMode;
+use crate::config::{ReleaseMode, render_release_name};
 use crate::pipeline::{Pipeline, PipelineStep};
 use anyhow::{Context, Result};
 use bytes::Bytes;
@@ -9,7 +9,7 @@ pub struct ReleaseParams {
     pub repo_owner: String,
     pub repo_name: String,
     pub tag: String,
-    pub name: String,
+    pub title: String,
     pub body: String,
     pub artifacts: Vec<PathBuf>,
     pub draft: bool,
@@ -82,14 +82,6 @@ fn sha256_of(path: &Path) -> Result<String> {
     Ok(hex::encode(hash))
 }
 
-pub fn release_title(name: &str, tag: &str) -> String {
-    if name.is_empty() {
-        format!("Release {tag}")
-    } else {
-        format!("{name} {tag}")
-    }
-}
-
 fn build_checksum_file(artifacts: &[PathBuf]) -> Result<String> {
     let mut out = String::new();
     for artifact in artifacts {
@@ -149,7 +141,7 @@ pub async fn create_release(params: ReleaseParams) -> Result<ReleaseResult> {
 
     let release = releases
         .create(&params.tag)
-        .name(&release_title(&params.name, &params.tag))
+        .name(&params.title)
         .body(&params.body)
         .draft(params.draft)
         .prerelease(params.prerelease)
@@ -202,7 +194,7 @@ pub fn release_step() -> PipelineStep {
             };
 
             let params = ReleaseParams {
-                name: config.project.name.clone(),
+                title: render_release_name(&config.project.release_name, &version)?,
                 repo_name: config.project.repo_name(),
                 repo_owner: config.project.owner(),
                 tag: version,

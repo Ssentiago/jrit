@@ -187,6 +187,7 @@ pub struct CiGenParams {
     pub build_command: String,
     pub artifact_name: String,
     pub binary_name: String,
+    pub release_name: String,
     pub targets: Vec<Target>,
     pub setup_steps: Vec<SetupStep>,
 }
@@ -339,7 +340,7 @@ pub fn generate_workflow(params: CiGenParams) -> anyhow::Result<String> {
                     condition: None,
                     with: Some({
                         let mut m = IndexMap::new();
-                        m.insert("name".into(), "Release ${{ github.ref_name }}".into());
+                        m.insert("name".into(), params.release_name.clone());
                         m.insert("tag_name".into(), "${{ github.ref_name }}".into());
                         m.insert("files".into(), "artifacts/**/*".into());
                         m.insert("fail_on_unmatched_files".into(), "true".into());

@@ -1,4 +1,4 @@
-use crate::config::models::{ChangelogType, Config, ReleaseMode};
+use crate::config::models::{ChangelogType, Config, ReleaseMode, render_release_name};
 use anyhow::Context;
 use anyhow::bail;
 use std::path::PathBuf;
@@ -36,6 +36,9 @@ fn validate_config(config: &Config) -> anyhow::Result<()> {
     }
     if p.branches.is_empty() {
         errors.push("project.branches is empty".into());
+    }
+    if let Err(e) = render_release_name(&p.release_name, "0.0.0") {
+        errors.push(format!("project.release_name: {e}"));
     }
     for (i, branch) in p.branches.iter().enumerate() {
         if branch.trim().is_empty() {

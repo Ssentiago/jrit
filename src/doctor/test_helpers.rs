@@ -53,6 +53,7 @@ pub(super) fn make_config(branches: Vec<&str>, components: Vec<Component>) -> Co
             changelog: None,
             release_mode: ReleaseMode::Local,
             sha256sums: false,
+            release_name: crate::config::default_release_name(),
         },
         components,
     }

@@ -67,6 +67,37 @@ pub struct Project {
     pub release_mode: ReleaseMode,
     #[serde(default)]
     pub sha256sums: bool,
+    #[serde(default = "default_release_name")]
+    pub release_name: String,
+}
+
+pub fn default_release_name() -> String {
+    "Release {{ version }}".to_string()
+}
+
+/// Renders a release name template, substituting the `{{ version }}` variable.
+/// Unknown variables and unclosed placeholders are rejected.
+pub fn render_release_name(template: &str, version: &str) -> anyhow::Result<String> {
+    if template.trim().is_empty() {
+        bail!("release_name template is empty");
+    }
+
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(open) = rest.find("{{") {
+        out.push_str(&rest[..open]);
+        let after = &rest[open + 2..];
+        let Some(close) = after.find("}}") else {
+            bail!("release_name template has an unclosed '{{' placeholder");
+        };
+        match after[..close].trim() {
+            "version" => out.push_str(version),
+            other => bail!("unknown release_name variable '{{{{ {other} }}}}', expected: version"),
+        }
+        rest = &after[close + 2..];
+    }
+    out.push_str(rest);
+    Ok(out)
 }
 
 impl Project {
@@ -220,5 +251,49 @@ mod tests {
 
         let on: Config = toml::from_str(&format!("{head}sha256sums = true\n{tail}")).unwrap();
         assert!(on.project.sha256sums);
+    }
+
+    #[test]
+    fn release_name_defaults_to_template() {
+        let head = "[project]\nname = \"demo\"\nrepo = \"owner/demo\"\nbranches = [\"main\"]\n";
+        let tail = "[[components]]\nname = \"main\"\npath = \".\"\nbuild = \"cargo build\"\nartifact = \"./a\"\nversion_files = [{ file = \"Cargo.toml\" }]\n";
+
+        let config: Config = toml::from_str(&format!("{head}{tail}")).unwrap();
+        assert_eq!(config.project.release_name, "Release {{ version }}");
+    }
+
+    #[test]
+    fn render_release_name_substitutes_version() {
+        assert_eq!(
+            render_release_name("Release {{ version }}", "1.2.3").unwrap(),
+            "Release 1.2.3"
+        );
+        assert_eq!(
+            render_release_name("Release{{version}}", "1.2.3").unwrap(),
+            "Release1.2.3"
+        );
+        assert_eq!(
+            render_release_name("{{ version }} is out", "1.2.3").unwrap(),
+            "1.2.3 is out"
+        );
+        assert_eq!(render_release_name("static name", "1.2.3").unwrap(), "static name");
+    }
+
+    #[test]
+    fn render_release_name_rejects_bad_templates() {
+        assert!(render_release_name("", "1.2.3").is_err());
+        assert!(render_release_name("   ", "1.2.3").is_err());
+        assert!(render_release_name("Release {{ version", "1.2.3").is_err());
+        assert!(render_release_name("Release {{ nope }}", "1.2.3").is_err());
+        assert!(render_release_name("Release {{ }}", "1.2.3").is_err());
+    }
+
+    #[test]
+    fn release_name_round_trips_through_toml() {
+        let config: Config = toml::from_str(
+            "[project]\nname = \"demo\"\nrepo = \"owner/demo\"\nbranches = [\"main\"]\nrelease_name = \"demo {{ version }}\"\n[[components]]\nname = \"main\"\npath = \".\"\nversion_files = [{ file = \"Cargo.toml\" }]\n",
+        )
+        .unwrap();
+        assert_eq!(config.project.release_name, "demo {{ version }}");
     }
 }

@@ -120,6 +120,8 @@ release_mode = "local"            # optional: "local" | "ci" (default: "local")
 
 sha256sums = true                 # optional: attach sha256sums.txt to the release (default: false)
 
+release_name = "Release {{ version }}"  # optional: GitHub release title template (default: "Release {{ version }}")
+
 [[components]]
 name = "main"
 path = "."                            # directory of the component, relative to jrit.toml
@@ -174,6 +176,13 @@ Disabled by default and must be turned on explicitly with `sha256sums = true` in
 release mode only), jrit generates a `sha256sums.txt` file with a SHA-256 checksum for every uploaded artifact and
 attaches it to the GitHub release. When the file is not attached, `jrit update` skips checksum verification and prints a
 warning.
+
+### `release_name`
+
+Template for the GitHub release title. The `{{ version }}` variable is replaced with the selected release version. The
+default is `"Release {{ version }}"`. In `ci` release mode the template is rendered into the generated workflow at init
+time, where `{{ version }}` maps to the pushed tag name. Unknown variables and unclosed placeholders are rejected when
+the config is loaded.
 
 ### `path` in `version_files`
 

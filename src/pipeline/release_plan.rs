@@ -1,6 +1,6 @@
-use crate::config::{ChangelogType, ReleaseMode};
+use crate::config::{ChangelogType, ReleaseMode, render_release_name};
 use crate::pipeline::pipeline::{Pipeline, PipelineStep};
-use crate::pipeline::pipeline_steps::github_step::{build_release_body, release_title};
+use crate::pipeline::pipeline_steps::github_step::build_release_body;
 use crate::pipeline::pipeline_steps::interactive_step::{Interactive, PlanAction};
 use crate::pipeline::pipeline_steps::versioning_step::VersionBumper;
 use crate::pipeline::release_context::render_draft;
@@ -133,7 +133,7 @@ impl ReleasePlan {
             })
             .collect();
 
-        let release_title = release_title(&config.project.name, &version);
+        let release_title = render_release_name(&config.project.release_name, &version)?;
         let release_body = match &changelog_body {
             Some(body) => {
                 build_release_body(body, prev_tag.as_deref(), &version, &config.project.repo)
@@ -302,7 +302,7 @@ pub fn step() -> PipelineStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Component, Config, Project, VersionFile};
+    use crate::config::{Component, Config, Project, VersionFile, default_release_name};
     use std::path::Path;
 
     fn git(root: &Path, args: &[&str]) {
@@ -330,6 +330,7 @@ mod tests {
                 changelog: Some("CHANGELOG.md".into()),
                 release_mode: ReleaseMode::Local,
                 sha256sums: true,
+                release_name: default_release_name(),
             },
             components: vec![Component {
                 name: "demo".into(),
@@ -396,6 +397,18 @@ mod tests {
         assert!(plan
             .release_body
             .contains("https://github.com/owner/demo/compare/v1.0.0...1.1.0"));
+        assert_eq!(plan.release_title, "Release 1.1.0");
+    }
+
+    #[test]
+    fn assemble_renders_custom_release_name_template() {
+        let dir = tempfile::tempdir().unwrap();
+        make_repo(dir.path());
+        let mut ctx = make_ctx(dir.path());
+        ctx.config.as_mut().unwrap().project.release_name = "demo {{version}}".into();
+
+        let plan = ReleasePlan::assemble(&ctx).unwrap();
+
         assert_eq!(plan.release_title, "demo 1.1.0");
     }
 
@@ -432,7 +445,7 @@ mod tests {
         assert!(out.contains("component demo:"));
         assert!(out.contains("build: cargo build --release"));
         assert!(out.contains("checksum file: sha256sums.txt"));
-        assert!(out.contains("title: demo 1.1.0"));
+        assert!(out.contains("title: Release 1.1.0"));
     }
 
     #[test]

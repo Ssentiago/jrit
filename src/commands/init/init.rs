@@ -1,5 +1,8 @@
 use crate::commands::init::ci_gen::{self, CiGenParams, SetupStep, available_targets};
-use crate::config::{ChangelogType, Component, Config, Project, ReleaseMode, VersionFile};
+use crate::config::{
+    ChangelogType, Component, Config, Project, ReleaseMode, VersionFile, default_release_name,
+    render_release_name,
+};
 use inquire::MultiSelect;
 use inquire::validator::Validation;
 use inquire::{Confirm, Select, Text};
@@ -138,6 +141,7 @@ pub async fn run_init() -> anyhow::Result<()> {
             release_mode,
             changelog,
             sha256sums: false,
+            release_name: default_release_name(),
         },
         components,
     };
@@ -217,6 +221,10 @@ pub async fn run_init() -> anyhow::Result<()> {
                 build_command,
                 artifact_name,
                 binary_name,
+                release_name: render_release_name(
+                    &out.project.release_name,
+                    "${{ github.ref_name }}",
+                )?,
                 targets,
                 setup_steps,
             })?;
