@@ -1,3 +1,9 @@
+## [0.6.0] - 2026-11-18
+
+### Features
+- add release name template ([`988b359`](https://github.com/Ssentiago/jrit/commit/988b35959a50d480c24b49100a7b2d83de78637a))
+- make sha256sums.txt upload opt-in ([`1f4a408`](https://github.com/Ssentiago/jrit/commit/1f4a408cf80058f1805f3515203047d0bc82f7b8))
+
 ## [0.5.0] - 2026-11-15
 
 ### Features
